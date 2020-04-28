@@ -333,6 +333,10 @@ impl Nat {
     /// 二进制位长度
     #[inline]
     pub fn bits_len(&self) -> usize {
+        if self == &Nat::from_u8(0) {
+            return 1
+        }
+        
         let num = self.num();
         let mut cnt = 0usize;
         let &last = self.as_vec().last().unwrap();
