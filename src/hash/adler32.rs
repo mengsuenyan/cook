@@ -6,7 +6,7 @@
 //! https://www.cnblogs.com/mengsuenyan/p/12802387.html
 //! https://mengsuenyan.gitee.io/docs/CS/%E5%B8%B8%E7%94%A8%E6%A0%A1%E9%AA%8C%E5%92%8C(Hash)%E7%AE%97%E6%B3%95.html
 
-use crate::hash::GenericHasher;
+use crate::hash::{GenericHasher, GenericHasherSum};
 use std::hash::Hasher;
 
 /// 小于2^16的最大质数
@@ -70,7 +70,7 @@ impl Hasher for Adler32 {
     }
 }
 
-impl GenericHasher<u32> for Adler32 {
+impl GenericHasher for Adler32 {
     fn block_size(&self) -> usize {
         ADLER32_SIZE
     }
@@ -99,9 +99,11 @@ impl GenericHasher<u32> for Adler32 {
         self.append_to_vec(&mut v);
         v
     }
+}
 
+impl GenericHasherSum<u32> for Adler32 {
     fn sum(&self) -> u32 {
-        self.digest.clone()
+        self.digest
     }
 }
 
@@ -109,7 +111,7 @@ impl GenericHasher<u32> for Adler32 {
 mod tests {
     //! this come from golang source code
 
-    use crate::hash::{Adler32, GenericHasher};
+    use crate::hash::{Adler32, GenericHasher, GenericHasherSum};
     use std::hash::Hasher;
 
     const TEST_DATA: [(u32, &str);32] = [

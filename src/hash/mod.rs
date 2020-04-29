@@ -3,5 +3,5 @@ mod fnv;
 mod hash;
 
 pub use adler32::Adler32;
-pub use hash::GenericHasher;
+pub use hash::{GenericHasher, GenericHasherSum};
 pub use fnv::Fnv;
