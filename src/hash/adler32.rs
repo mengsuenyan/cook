@@ -6,7 +6,7 @@
 //! https://www.cnblogs.com/mengsuenyan/p/12802387.html
 //! https://mengsuenyan.gitee.io/docs/CS/%E5%B8%B8%E7%94%A8%E6%A0%A1%E9%AA%8C%E5%92%8C(Hash)%E7%AE%97%E6%B3%95.html
 
-use crate::hash::{GenericHasher32, GenericHasher};
+use crate::hash::GenericHasher;
 use std::hash::Hasher;
 
 /// 小于2^16的最大质数
@@ -64,7 +64,7 @@ impl Adler32 {
 
 impl Hasher for Adler32 {
     fn finish(&self) -> u64 {
-        u64::from(self.finish32())
+        u64::from(self.sum())
     }
 
     fn write(&mut self, bytes: &[u8]) {
@@ -72,7 +72,7 @@ impl Hasher for Adler32 {
     }
 }
 
-impl GenericHasher for Adler32 {
+impl GenericHasher<u32> for Adler32 {
     fn block_size(&self) -> usize {
         ADLER32_SIZE
     }
@@ -88,7 +88,7 @@ impl GenericHasher for Adler32 {
     fn append_to_vec(&self, data: &mut Vec<u8>) -> usize {
         let len = data.len();
         
-        let h = self.finish32();
+        let h = self.sum();
         for &ele in h.to_be_bytes().iter() {
             data.push(ele)
         }
@@ -101,11 +101,9 @@ impl GenericHasher for Adler32 {
         self.append_to_vec(&mut v);
         v
     }
-}
 
-impl GenericHasher32 for Adler32 {
-    fn finish32(&self) -> u32 {
-        self.digest
+    fn sum(&self) -> u32 {
+        self.digest.clone()
     }
 }
 
@@ -113,7 +111,7 @@ impl GenericHasher32 for Adler32 {
 mod tests {
     //! this come from golang source code
     
-    use crate::hash::{Adler32, GenericHasher32, GenericHasher};
+    use crate::hash::{Adler32, GenericHasher};
     use std::hash::Hasher;
 
     const TEST_DATA: [(u32, &str);32] = [
@@ -156,7 +154,7 @@ mod tests {
         let mut h = Adler32::new();
         for ele in TEST_DATA.iter() {
             h.write(ele.1.as_bytes());
-            assert_eq!(ele.0, h.finish32());
+            assert_eq!(ele.0, h.sum());
             h.reset();
         }
     }
@@ -177,24 +175,24 @@ mod tests {
         for ele in mo.iter() {
             h.write(v.as_slice());
             h.write_u8(ele.2);
-            assert_eq!(ele.0, h.finish32());
+            assert_eq!(ele.0, h.sum());
             h.reset();
             v.push(0xff);
         }
         
         let v = vec![0x00u8; 100000];
         h.write(v.as_slice());
-        assert_eq!(0x86af0001, h.finish32());
+        assert_eq!(0x86af0001, h.sum());
         h.reset();
 
         let v = vec![b'a'; 100000];
         h.write(v.as_slice());
-        assert_eq!(0x79660b4d, h.finish32());
+        assert_eq!(0x79660b4d, h.sum());
         h.reset();
         
         let s = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(10000);
         h.write(s.as_bytes());
-        assert_eq!(0x110588ee, h.finish32());
+        assert_eq!(0x110588ee, h.sum());
         h.reset();
     }
 }
