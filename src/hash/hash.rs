@@ -31,15 +31,15 @@ pub trait GenericHasher: Hasher {
 
 pub trait GenericHasher32: GenericHasher {
     /// 返回32位hash值
-    fn finish32() -> u32;
+    fn finish32(&self) -> u32;
 }
 
 pub trait GenericHasher64: GenericHasher {
     /// 返回64位Hash值
-    fn finish64() -> u32;
+    fn finish64(&self) -> u32;
 }
 
 pub trait GenericHasher128: GenericHasher {
     /// 返回128位Hash值
-    fn finish128() -> u128;
+    fn finish128(&self) -> u128;
 }
