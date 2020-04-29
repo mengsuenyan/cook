@@ -95,7 +95,7 @@ impl GenericHasher for Adler32 {
     }
 
     fn append_to_slice(&self, data: &[u8]) -> Vec<u8> {
-        let mut v = Vec::with_capacity(data.len() + self.size());
+        let mut v = data.to_vec();
         self.append_to_vec(&mut v);
         v
     }
