@@ -181,6 +181,16 @@ pub struct RngSource {
 }
 
 impl RngSource {
+    pub fn new(sd: i64) -> RngSource {
+        let mut rng = RngSource {
+            tap: 0,
+            feed: 0,
+            vec: [0; RNG_LEN],
+        };
+        rng.seed(sd);
+        rng
+    }
+    
     // seed rng x[n+1] = 48271 * x[n] mod (2**31 - 1)
     fn seed_rand(x: i32) -> i32 {
         let hi = x / RNG_Q;
@@ -250,7 +260,7 @@ impl RngSource {
 
 impl Seed<i64> for RngSource {
 
-    fn set_seed(&mut self, sd: i64) {
+    fn seed(&mut self, sd: i64) {
         self.tap = 0;
         self.feed = (RNG_LEN as isize) - RNG_TAP;
         let mut sd = sd % (RNG_M as i64);
@@ -281,16 +291,16 @@ impl Seed<i64> for RngSource {
 }
 
 impl Source<i64, i64> for RngSource {
-    /// 均匀分布, 63个有效位(符号位未用)  
-    fn generate_prn(&mut self) -> i64 {
-        let prn: u64 = self.generate_prn();
+    /// [0, 1<<63-1)
+    fn rng(&mut self) -> i64 {
+        let prn: u64 = self.rng();
         (prn & RNG_MASK) as i64
     }
 }
 
 impl Source<u64, i64> for RngSource {
-    /// 均匀分布, 64个有效位  
-    fn generate_prn(&mut self) -> u64 {
+    /// [0, 1<<64-1)
+    fn rng(&mut self) -> u64 {
         self.tap -= 1;
         if self.tap < 0 {
             self.tap += RNG_LEN as isize;
@@ -309,4 +319,49 @@ impl Source<u64, i64> for RngSource {
     }
 }
 
+impl Source<u32, i64> for RngSource {
+    /// [0, 1<<32-1)
+    fn rng(&mut self) -> u32 {
+        let r: i64 = self.rng();
+        (r >> 31) as u32
+    }
+}
 
+impl Source<i32, i64> for RngSource {
+    /// [0, 1<<31-1)
+    fn rng(&mut self) -> i32 {
+        let r: i64 = self.rng();
+        (r >> 32) as i32
+    }
+}
+
+
+impl Source<f64, i64> for RngSource {
+    fn rng(&mut self) -> f64 {
+        loop {
+            let r: i64 = self.rng();
+            let (hi, lo) = ((r >> 32) as u32, (r & 0xffffffff) as u32);
+            let d2 = 2.0f64.powi(63);
+            let d1 = (hi as f64) * 2.0f64.powi(32) + (lo as f64);
+            let f = d1 / d2;
+            if f != 1f64 {
+                return f;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::math::rand::rngsource::RngSource;
+    use crate::math::rand::source::Source;
+
+    #[test]
+    fn test_rng_source() {
+        let mut rng = RngSource::new(1);
+        for _ in 0..1000 {
+            let r: f64 = rng.rng();
+            assert!(r < 1.0);
+        }
+    }
+}

@@ -4,7 +4,7 @@ pub trait Seed<Sd>
     where Sd: Copy + PartialEq + PartialOrd {
     
     /// set seed value to initialize the pseudo random number generator
-    fn set_seed(&mut self, sd: Sd);
+    fn seed(&mut self, sd: Sd);
 }
 
 pub trait Source<Rd, Sd>: Seed<Sd>
@@ -12,6 +12,6 @@ pub trait Source<Rd, Sd>: Seed<Sd>
         Sd: Copy + PartialOrd + PartialEq { 
     
     // generate pseudo random number
-    fn generate_prn(&mut self) -> Rd;
+    fn rng(&mut self) -> Rd;
 }
 
