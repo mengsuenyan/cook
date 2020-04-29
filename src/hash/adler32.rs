@@ -1,7 +1,7 @@
-//! Adler-32校验算法, RFC1950  
-//! C = s1 + s2 * 2^16;  
-//! s1 = 1; s2 = 0;  
-//! s1 = (s1+byte) % Mod;  
+//! Adler-32校验算法, RFC1950
+//! C = s1 + s2 * 2^16;
+//! s1 = 1; s2 = 0;
+//! s1 = (s1+byte) % Mod;
 //! s2 = (s1 + s2) % Mod;
 //! https://www.cnblogs.com/mengsuenyan/p/12802387.html
 //! https://mengsuenyan.gitee.io/docs/CS/%E5%B8%B8%E7%94%A8%E6%A0%A1%E9%AA%8C%E5%92%8C(Hash)%E7%AE%97%E6%B3%95.html
@@ -17,7 +17,7 @@ const ADLER32_MOD: u32 = 65521;
 const ADLER32_NMAX: usize = 5552;
 
 /// Adler32算法hash值的字节长度
-const ADLER32_SIZE:usize = 4;
+const ADLER32_SIZE: usize = 4;
 
 pub struct Adler32 {
     digest: u32,
@@ -25,14 +25,12 @@ pub struct Adler32 {
 
 impl Adler32 {
     pub fn new() -> Adler32 {
-        Adler32 {
-            digest: 1
-        }
+        Adler32 { digest: 1 }
     }
-    
+
     fn update(&self, bytes: &[u8]) -> u32 {
         let (mut s1, mut s2) = (self.digest & 0xffff, self.digest >> 16);
-        
+
         let num = bytes.len() / ADLER32_NMAX;
         let rem = bytes.len() % ADLER32_NMAX;
         let mut idx = 0;
@@ -43,12 +41,12 @@ impl Adler32 {
                 s1 += ele as u32;
                 s2 += s1;
             }
-            
+
             s1 %= ADLER32_MOD;
             s2 %= ADLER32_MOD;
             idx = end;
         }
-        
+
         let end = idx + rem;
         let b = &bytes[idx..end];
         for &ele in b.iter() {
@@ -87,12 +85,12 @@ impl GenericHasher<u32> for Adler32 {
 
     fn append_to_vec(&self, data: &mut Vec<u8>) -> usize {
         let len = data.len();
-        
+
         let h = self.sum();
         for &ele in h.to_be_bytes().iter() {
             data.push(ele)
         }
-        
+
         data.len() - len
     }
 
@@ -110,7 +108,7 @@ impl GenericHasher<u32> for Adler32 {
 #[cfg(test)]
 mod tests {
     //! this come from golang source code
-    
+
     use crate::hash::{Adler32, GenericHasher};
     use std::hash::Hasher;
 
@@ -148,7 +146,7 @@ mod tests {
         (0x2e5d1316, "How can you write a big system without C++?  -Paul Glick"),
         (0xd0201df6, "'Invariant assertions' is the most elegant programming technique!  -Tom Szymanski"),
     ];
-    
+
     #[test]
     fn test_adler32_small() {
         let mut h = Adler32::new();
@@ -158,20 +156,21 @@ mod tests {
             h.reset();
         }
     }
-    
+
     #[test]
     fn test_adler32_big() {
-        let mo = [(0x211297c8,5548 , b'8'),
-        (0xbaa198c8, 5549, b'9'),
-        (0x553499be, 5550, b'0'),
-        (0xf0c19abe, 5551, b'1'),
-        (0x8d5c9bbe, 5552, b'2'),
-        (0x2af69cbe, 5553, b'3'),
-        (0xc9809dbe, 5554, b'4'),
-        (0x69189ebe, 5555, b'5')
+        let mo = [
+            (0x211297c8, 5548, b'8'),
+            (0xbaa198c8, 5549, b'9'),
+            (0x553499be, 5550, b'0'),
+            (0xf0c19abe, 5551, b'1'),
+            (0x8d5c9bbe, 5552, b'2'),
+            (0x2af69cbe, 5553, b'3'),
+            (0xc9809dbe, 5554, b'4'),
+            (0x69189ebe, 5555, b'5'),
         ];
         let mut h = Adler32::new();
-        let mut v = vec![0xffu8;5548];
+        let mut v = vec![0xffu8; 5548];
         for ele in mo.iter() {
             h.write(v.as_slice());
             h.write_u8(ele.2);
@@ -179,7 +178,7 @@ mod tests {
             h.reset();
             v.push(0xff);
         }
-        
+
         let v = vec![0x00u8; 100000];
         h.write(v.as_slice());
         assert_eq!(0x86af0001, h.sum());
@@ -189,7 +188,7 @@ mod tests {
         h.write(v.as_slice());
         assert_eq!(0x79660b4d, h.sum());
         h.reset();
-        
+
         let s = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(10000);
         h.write(s.as_bytes());
         assert_eq!(0x110588ee, h.sum());

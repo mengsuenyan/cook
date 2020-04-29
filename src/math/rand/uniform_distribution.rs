@@ -3,7 +3,7 @@
 use crate::math::rand::rngsource::RngSource;
 use crate::math::rand::source::Source;
 
-pub struct UniformDistribution{
+pub struct UniformDistribution {
     min: i64,
     max: i64,
     source: RngSource,
@@ -22,10 +22,10 @@ impl UniformDistribution {
             })
         }
     }
-    
+
     pub fn rng(&mut self) -> i64 {
         let n = self.max - self.min;
-        let val = if n & (n-1) == 0 {
+        let val = if n & (n - 1) == 0 {
             let r: i64 = self.source.rng();
             r & (n - 1)
         } else {
@@ -36,7 +36,7 @@ impl UniformDistribution {
             }
             r % n
         };
-        
+
         val + self.min
     }
 }
@@ -52,7 +52,7 @@ mod tests {
         let mut ud = ud.unwrap();
         for _ in 0..1000 {
             let r = ud.rng();
-            assert!(r < 100 && r >=0 );
+            assert!(r < 100 && r >= 0);
         }
     }
 }

@@ -1,20 +1,13 @@
-use {
-    std::{
-        vec::Vec,
-        ops::{
-            Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign, Rem, RemAssign,
-            Shl, ShlAssign, Shr, ShrAssign,
-            BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not,
-        },
-        cmp::{
-            PartialEq, PartialOrd,
-        },
-        fmt::{
-            Binary, Display, Octal, LowerHex, UpperHex, Debug,
-            Formatter, Error
-        },
-        cmp::{Ordering}
-    }
+use std::{
+    cmp::Ordering,
+    cmp::{PartialEq, PartialOrd},
+    fmt::{Binary, Debug, Display, Error, Formatter, LowerHex, Octal, UpperHex},
+    ops::{
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
+        DivAssign, Mul, MulAssign, Not, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub,
+        SubAssign,
+    },
+    vec::Vec,
 };
 
 const HEX_BASIC_LEN: usize = 8;
@@ -37,7 +30,7 @@ const BIN_BASIC_LEN: usize = 32;
 /// 注: 不支持Inf无穷大的自然数, 诸如Nat::from_u8(1)/Nat::from_u8(0)之类的操作会得到NaN;
 #[derive(Clone)]
 pub struct Nat {
-    nat: Vec<u32>
+    nat: Vec<u32>,
 }
 
 macro_rules! nat_from_bytes_macro {
@@ -77,16 +70,17 @@ macro_rules! nat_from_basic_type {
                 nat.push(ele);
             }
             Nat::trim_last_zeros(&mut nat, 0);
-            Nat {nat}
+            Nat { nat }
         }
     };
     ($fuc_name: ident, $type: ty, 0) => {
         pub fn $fuc_name(val: $type) -> Nat {
-            Nat {nat: vec![val as u32]}
+            Nat {
+                nat: vec![val as u32],
+            }
         }
     };
 }
-
 
 impl Nat {
     fn from_hex_bytes(bytes: &[u8]) -> Nat {
@@ -165,7 +159,9 @@ impl Nat {
 
     /// 截掉高位多余的0
     fn trim_last_zeros<T: PartialOrd>(nat: &mut Vec<T>, zero: T)
-        where T: PartialEq {
+    where
+        T: PartialEq,
+    {
         let mut cnt = 0;
         for ele in nat.iter().rev() {
             if *ele == zero {
@@ -189,7 +185,9 @@ impl Nat {
     /// 右移超过val的位数时, 返回值为0
     #[inline]
     fn shr_as_c<T>(val: T, bits: T) -> T
-        where T: Shr<Output=T> + From<u32> + PartialOrd + Copy {
+    where
+        T: Shr<Output = T> + From<u32> + PartialOrd + Copy,
+    {
         let len: T = T::from((std::mem::size_of::<T>() << 3) as u32);
 
         if bits < len {
@@ -202,7 +200,9 @@ impl Nat {
     /// 左移超过val的位数时, 返回值为0
     #[inline]
     fn shl_as_c<T>(val: T, bits: T) -> T
-        where  T: Shl<Output=T> + From<u32> + PartialOrd + Copy {
+    where
+        T: Shl<Output = T> + From<u32> + PartialOrd + Copy,
+    {
         let len = T::from((std::mem::size_of::<T>() << 3) as u32);
         if bits < len {
             val << bits
@@ -231,12 +231,16 @@ impl Nat {
         let (min, max) = self.min_max_by_num(rhs);
         const MASK: u64 = 0xffffffff;
         const SHR_BITS: u8 = 32;
-        let mut nat = Nat { nat: Vec::with_capacity(min.len() + max.len()) };
+        let mut nat = Nat {
+            nat: Vec::with_capacity(min.len() + max.len()),
+        };
 
         nat.as_vec_mut().push(0u32);
         // 按32进制计算, 两数相乘最多不超过64位;
         for (i, &min_ele) in min.iter().enumerate() {
-            let mut round_nat = Nat { nat: Vec::with_capacity(min.len() + max.len()) };
+            let mut round_nat = Nat {
+                nat: Vec::with_capacity(min.len() + max.len()),
+            };
             let round = round_nat.as_vec_mut();
             // 每一轮乘max都左移32位, 额外留出32位作为上一次单步乘的进位
             round.resize(i + 1, 0);
@@ -272,7 +276,6 @@ impl Nat {
         nat
     }
 
-
     #[inline]
     fn min_max_by_num<'a>(&'a self, rhs: &'a Nat) -> (&'a Vec<u32>, &'a Vec<u32>) {
         if self.num() < rhs.num() {
@@ -287,29 +290,24 @@ impl Nat {
         if s.is_ascii() && !s.is_empty() {
             let bytes = s.as_bytes();
             let check_ok = match base {
-                2 => bytes.iter().all(|&x| -> bool {
-                    x == b'0' || x == b'1'
-                }),
-                8 => bytes.iter().all(|&x| -> bool {
-                    x >= b'0' && x <= b'7'
-                }),
-                10 => bytes.iter().all(|&x| -> bool {
-                    x >= b'0' && x <= b'9'
-                }),
+                2 => bytes.iter().all(|&x| -> bool { x == b'0' || x == b'1' }),
+                8 => bytes.iter().all(|&x| -> bool { x >= b'0' && x <= b'7' }),
+                10 => bytes.iter().all(|&x| -> bool { x >= b'0' && x <= b'9' }),
                 16 => bytes.iter().all(|&x| -> bool {
-                    (x >= b'0' && x <= b'9') ||
-                        (x >= b'a' && x <= b'f') ||
-                        (x >= b'A' && x <= b'F')
+                    (x >= b'0' && x <= b'9') || (x >= b'a' && x <= b'f') || (x >= b'A' && x <= b'F')
                 }),
-                _ => false
+                _ => false,
             };
 
-            if check_ok { Some(bytes) } else { None }
+            if check_ok {
+                Some(bytes)
+            } else {
+                None
+            }
         } else {
             None
         }
     }
-
 
     #[inline]
     fn trim_as_bytes(s: &[u8]) -> &[u8] {
@@ -334,9 +332,9 @@ impl Nat {
     #[inline]
     pub fn bits_len(&self) -> usize {
         if self == &Nat::from_u8(0) {
-            return 1
+            return 1;
         }
-        
+
         let num = self.num();
         let mut cnt = 0usize;
         let &last = self.as_vec().last().unwrap();
@@ -366,10 +364,10 @@ impl Nat {
                     8 => Nat::from_oct_bytes(x),
                     10 => Nat::from_dec_bytes(x),
                     16 => Nat::from_hex_bytes(x),
-                    _ => Nat::nan()
+                    _ => Nat::nan(),
                 }
             }
-            _ => Nat::nan()
+            _ => Nat::nan(),
         }
     }
 
@@ -401,9 +399,9 @@ impl Nat {
                     nat.push(val);
                 }
 
-                Nat {nat}
-            },
-            _ => { Nat::nan() }
+                Nat { nat }
+            }
+            _ => Nat::nan(),
         }
     }
 
@@ -447,7 +445,9 @@ impl<'a, 'b> Add<&'b Nat> for &'a Nat {
             }
         }
 
-        if carry > 0 { nat.push(carry); }
+        if carry > 0 {
+            nat.push(carry);
+        }
 
         Nat { nat }
     }
@@ -590,7 +590,7 @@ impl<'b> DivAssign<&'b Nat> for Nat {
 impl<'a, 'b> Rem<&'b Nat> for &'a Nat {
     type Output = Nat;
     fn rem(self, rhs: &'b Nat) -> Self::Output {
-        if self.is_nan() || rhs.is_nan() || (rhs == &Nat::from_u8(0)){
+        if self.is_nan() || rhs.is_nan() || (rhs == &Nat::from_u8(0)) {
             return Nat::nan();
         } else if self < rhs {
             return self.clone();
@@ -801,7 +801,7 @@ impl Shr<usize> for &Nat {
                 let mut arr_itr = arr.iter();
                 let mut pre = *arr_itr.next().unwrap();
                 for &ele in arr_itr {
-                    let val = (pre >> rom) | Nat::shl_as_c(ele, 32-rom);
+                    let val = (pre >> rom) | Nat::shl_as_c(ele, 32 - rom);
                     pre = ele;
                     nat.push(val);
                 }
@@ -845,7 +845,7 @@ impl Shl<usize> for &Nat {
             nat.push(val);
         }
 
-        if pre > 0{
+        if pre > 0 {
             nat.push(pre);
         }
 
@@ -894,7 +894,7 @@ impl PartialOrd for Nat {
                             relation = Some(Ordering::Less);
                             break 'g;
                         }
-                    },
+                    }
                     _ => {}
                 };
             }
@@ -1023,7 +1023,6 @@ impl Display for Nat {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1062,8 +1061,14 @@ mod tests {
     #[test]
     fn test_nat_from_and_fmt() {
         let n1 = Nat::from_u8(std::u8::MAX);
-        test_nat_equal_tgt!(n1, (from_u8, u8), (from_u16, u16), (from_u32, u32),
-            (from_u64, u64), (from_u128, u128));
+        test_nat_equal_tgt!(
+            n1,
+            (from_u8, u8),
+            (from_u16, u16),
+            (from_u32, u32),
+            (from_u64, u64),
+            (from_u128, u128)
+        );
     }
 
     #[test]
@@ -1131,7 +1136,10 @@ mod tests {
         assert_eq!(&l1 + &l2, sum);
         l1 += &l2;
         assert_eq!(l1, sum);
-        assert_eq!(&l1 + &Nat::from_u8(1), Nat::from_str("1ffffffffffffffffffffffffffffffff", 16));
+        assert_eq!(
+            &l1 + &Nat::from_u8(1),
+            Nat::from_str("1ffffffffffffffffffffffffffffffff", 16)
+        );
         let l1 = Nat::from_str("fffffffffffffffffffffffffffffffffff3222222222222222222234900000000000000ffffffffffffffffffffff", 16);
         let l2 = Nat::from_str("ff9000000000000000000000322222222222223209053065839583093285340530493058304593058390584", 16);
         let sum = Nat::from_str("10000000ff900000000000000000000032215444444444542b275287b82583093285340540493058304593058390583", 16);
@@ -1151,7 +1159,10 @@ mod tests {
         let l1 = Nat::from_u128(std::u128::MAX);
         let l2 = Nat::from_u8(std::u8::MAX);
         assert_eq!(&l1 - &l1, Nat::from_u8(0));
-        assert_eq!(&l1 - &l2, Nat::from_u128(std::u128::MAX - (std::u8::MAX as u128)));
+        assert_eq!(
+            &l1 - &l2,
+            Nat::from_u128(std::u128::MAX - (std::u8::MAX as u128))
+        );
         assert_eq!(&l2 - &l1, &l1 - &l2);
         let l1 = Nat::from_str("fffffffffffffffffffffffffffffffffff3222222222222222222234900000000000000ffffffffffffffffffffff", 16);
         let l2 = Nat::from_str("32888f300000000000000322222229750348593045830670204", 16);

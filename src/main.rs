@@ -1,4 +1,4 @@
-use cook::math::big as big;
+use cook::math::big;
 
 fn main() {
     let l = big::Nat::from_u8(0);

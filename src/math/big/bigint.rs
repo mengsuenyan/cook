@@ -1,23 +1,14 @@
 //! This file implements signed multi-precision integers.
 
-use {
-    std::{
-        ops::{
-            Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign, Rem, RemAssign,
-            Shl, ShlAssign, Shr, ShrAssign,
-            BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not,
-        },
-        cmp::{
-            PartialOrd, PartialEq, Ordering
-        },
-        fmt::{
-            Binary, Display, Octal, LowerHex, UpperHex, Debug,
-            Formatter, Error
-        },
-        convert::{
-            From,
-        }
-    }
+use std::{
+    cmp::{Ordering, PartialEq, PartialOrd},
+    convert::From,
+    fmt::{Binary, Debug, Display, Error, Formatter, LowerHex, Octal, UpperHex},
+    ops::{
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
+        DivAssign, Mul, MulAssign, Not, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub,
+        SubAssign,
+    },
 };
 
 use crate::math::big::Nat;
@@ -54,7 +45,6 @@ pub struct BigInt {
 }
 
 impl BigInt {
-
     fn parse(s: &str) -> (BigIntType, &str, u8) {
         let mut s_itr = s.bytes();
         let p1 = s_itr.next();
@@ -65,21 +55,21 @@ impl BigInt {
             Some(b'+') => (Pos, p2, p3, 1),
             Some(b'-') => (Neg, p2, p3, 1),
             Some(_) => (Pos, p1, p2, 0),
-            _ => {(Pos, p1, p2, 0)}
+            _ => (Pos, p1, p2, 0),
         };
 
         match s1 {
             Some(b'0') => {
                 match s2 {
-                    Some(b'x') => (bi_type, &s[(idx+2)..], 16),
-                    Some(b'X') => (bi_type, &s[(idx+2)..], 16),
-                    Some(b'b') => (bi_type, &s[(idx+2)..], 2),
-                    Some(_) => (bi_type, &s[(idx+1)..], 8),
+                    Some(b'x') => (bi_type, &s[(idx + 2)..], 16),
+                    Some(b'X') => (bi_type, &s[(idx + 2)..], 16),
+                    Some(b'b') => (bi_type, &s[(idx + 2)..], 2),
+                    Some(_) => (bi_type, &s[(idx + 1)..], 8),
                     None => (Pos, s, 10), // "0"
                 }
-            },
+            }
             Some(_) => (bi_type, &s[idx..], 10),
-            None=> (Pos, s, 10)
+            None => (Pos, s, 10),
         }
     }
 
@@ -108,7 +98,7 @@ impl BigInt {
     fn nan() -> BigInt {
         BigInt {
             bi_type: Pos,
-            nat: Nat::from_str("ff", 10)
+            nat: Nat::from_str("ff", 10),
         }
     }
 
@@ -117,7 +107,6 @@ impl BigInt {
         self.nat.is_nan()
     }
 }
-
 
 macro_rules! bi_impl_from_macro {
     ($Tgt: ty, Sign) => {
@@ -129,7 +118,7 @@ macro_rules! bi_impl_from_macro {
                     } else {
                         Nat::from_u128(val.abs() as u128)
                     },
-                    bi_type: if val < 0 {Neg} else {Pos}
+                    bi_type: if val < 0 { Neg } else { Pos },
                 }
             }
         }
@@ -139,7 +128,7 @@ macro_rules! bi_impl_from_macro {
             fn from(val: $Tgt) -> BigInt {
                 BigInt {
                     nat: Nat::from_u128(val as u128),
-                    bi_type: Pos
+                    bi_type: Pos,
                 }
             }
         }
@@ -164,7 +153,7 @@ impl From<&str> for BigInt {
         let (bi_type, ss, base) = BigInt::parse(s);
         BigInt {
             nat: Nat::new(ss, base),
-            bi_type
+            bi_type,
         }
     }
 }
@@ -208,18 +197,14 @@ impl PartialEq for BigInt {
 macro_rules! bi_pos_neg_mat_macro {
     ($Self:ident, $Rhs:ident, $PosPos:expr, $PosNeg:expr, $NegPos: expr, $NegNeg: expr) => {
         match $Self.bi_type {
-            Pos => {
-                match $Rhs.bi_type {
-                    Pos => $PosPos,
-                    Neg => $PosNeg,
-                }
+            Pos => match $Rhs.bi_type {
+                Pos => $PosPos,
+                Neg => $PosNeg,
             },
-            Neg => {
-                match $Rhs.bi_type {
-                    Pos => $NegPos,
-                    Neg => $NegNeg,
-                }
-            }
+            Neg => match $Rhs.bi_type {
+                Pos => $NegPos,
+                Neg => $NegNeg,
+            },
         }
     };
 }
@@ -227,44 +212,37 @@ macro_rules! bi_pos_neg_mat_macro {
 impl PartialOrd for BigInt {
     fn partial_cmp(&self, rhs: &BigInt) -> Option<Ordering> {
         match self.get_nat().partial_cmp(rhs.get_nat()) {
-            None => {None},
+            None => None,
             Some(Ordering::Equal) => {
                 if self.is_zero() {
                     Some(Ordering::Equal)
                 } else {
-                    bi_pos_neg_mat_macro!(self, rhs, {
-                        Some(Ordering::Equal)
-                    }, {
-                        Some(Ordering::Greater)
-                    }, {
-                        Some(Ordering::Less)
-                    }, {
-                        Some(Ordering::Equal)
-                    })
+                    bi_pos_neg_mat_macro!(
+                        self,
+                        rhs,
+                        { Some(Ordering::Equal) },
+                        { Some(Ordering::Greater) },
+                        { Some(Ordering::Less) },
+                        { Some(Ordering::Equal) }
+                    )
                 }
-            },
-            Some(Ordering::Less) => {
-                bi_pos_neg_mat_macro!(self, rhs, {
-                    Some(Ordering::Less)
-                }, {
-                    Some(Ordering::Greater)
-                }, {
-                    Some(Ordering::Less)
-                }, {
-                    Some(Ordering::Greater)
-                })
-            },
-            Some(Ordering::Greater) => {
-                bi_pos_neg_mat_macro!(self, rhs, {
-                    Some(Ordering::Greater)
-                }, {
-                    Some(Ordering::Greater)
-                }, {
-                    Some(Ordering::Less)
-                }, {
-                    Some(Ordering::Less)
-                })
             }
+            Some(Ordering::Less) => bi_pos_neg_mat_macro!(
+                self,
+                rhs,
+                { Some(Ordering::Less) },
+                { Some(Ordering::Greater) },
+                { Some(Ordering::Less) },
+                { Some(Ordering::Greater) }
+            ),
+            Some(Ordering::Greater) => bi_pos_neg_mat_macro!(
+                self,
+                rhs,
+                { Some(Ordering::Greater) },
+                { Some(Ordering::Greater) },
+                { Some(Ordering::Less) },
+                { Some(Ordering::Less) }
+            ),
         }
     }
 }
@@ -274,14 +252,14 @@ impl<'a, 'b> BitAnd<&'b BigInt> for &'a BigInt {
     fn bitand(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() & rhs.get_nat(),
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Pos}, {Pos}, {Neg}),
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Pos }, { Pos }, { Neg }),
         }
     }
 }
 
 impl<'b> BitAndAssign<&'b BigInt> for BigInt {
     fn bitand_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Pos}, {Pos}, {Neg});
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Pos }, { Pos }, { Neg });
         *self.get_nat_mut() &= rhs.get_nat();
     }
 }
@@ -291,15 +269,15 @@ impl<'a, 'b> BitOr<&'b BigInt> for &'a BigInt {
 
     fn bitor(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Neg}, {Neg}, {Neg}),
-            nat: self.get_nat() | rhs.get_nat()
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Neg }),
+            nat: self.get_nat() | rhs.get_nat(),
         }
     }
 }
 
-impl<'b> BitOrAssign<&'b BigInt> for BigInt  {
+impl<'b> BitOrAssign<&'b BigInt> for BigInt {
     fn bitor_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Neg}, {Neg}, {Neg});
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Neg });
         *self.get_nat_mut() |= rhs.get_nat();
     }
 }
@@ -308,7 +286,7 @@ impl<'a, 'b> BitXor<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn bitxor(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Neg}, {Neg}, {Pos}),
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Pos }),
             nat: self.get_nat() ^ rhs.get_nat(),
         }
     }
@@ -316,7 +294,7 @@ impl<'a, 'b> BitXor<&'b BigInt> for &'a BigInt {
 
 impl<'b> BitXorAssign<&'b BigInt> for BigInt {
     fn bitxor_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, {Pos}, {Neg}, {Neg}, {Pos});
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Pos });
         *self.get_nat_mut() ^= rhs.get_nat();
     }
 }
@@ -325,7 +303,10 @@ impl Not for &BigInt {
     type Output = BigInt;
     fn not(self) -> Self::Output {
         BigInt {
-            bi_type: match self.bi_type { Pos => Neg, Neg => Pos },
+            bi_type: match self.bi_type {
+                Pos => Neg,
+                Neg => Pos,
+            },
             nat: self.get_nat().not(),
         }
     }
@@ -335,46 +316,84 @@ impl<'a, 'b> Add<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn add(self, rhs: &'b BigInt) -> Self::Output {
         let is_great = self.get_nat() >= rhs.get_nat();
-        bi_pos_neg_mat_macro!(self, rhs, {
-            BigInt {nat: self.get_nat() + rhs.get_nat(), bi_type: Pos}
-        }, {
-            if is_great {
-                BigInt {nat: self.get_nat() - rhs.get_nat(), bi_type: Pos}
-            } else {
-                BigInt {nat: rhs.get_nat() - self.get_nat(), bi_type: Neg}
+        bi_pos_neg_mat_macro!(
+            self,
+            rhs,
+            {
+                BigInt {
+                    nat: self.get_nat() + rhs.get_nat(),
+                    bi_type: Pos,
+                }
+            },
+            {
+                if is_great {
+                    BigInt {
+                        nat: self.get_nat() - rhs.get_nat(),
+                        bi_type: Pos,
+                    }
+                } else {
+                    BigInt {
+                        nat: rhs.get_nat() - self.get_nat(),
+                        bi_type: Neg,
+                    }
+                }
+            },
+            {
+                if is_great {
+                    BigInt {
+                        nat: self.get_nat() - rhs.get_nat(),
+                        bi_type: Neg,
+                    }
+                } else {
+                    BigInt {
+                        nat: rhs.get_nat() - self.get_nat(),
+                        bi_type: Pos,
+                    }
+                }
+            },
+            {
+                BigInt {
+                    nat: self.get_nat() + rhs.get_nat(),
+                    bi_type: Neg,
+                }
             }
-        }, {
-            if is_great {
-                BigInt {nat: self.get_nat() - rhs.get_nat(), bi_type: Neg}
-            } else {
-                BigInt {nat: rhs.get_nat() - self.get_nat(), bi_type: Pos}
-            }
-        }, {
-            BigInt {nat: self.get_nat() + rhs.get_nat(), bi_type: Neg}
-        })
+        )
     }
 }
 
 impl<'b> AddAssign<&'b BigInt> for BigInt {
     fn add_assign(&mut self, rhs: &'b BigInt) {
         let is_great = self.get_nat() >= rhs.get_nat();
-        bi_pos_neg_mat_macro!(self, rhs, {
-            self.bi_type = Pos; *self.get_nat_mut() += rhs.get_nat();
-        }, {
-            if is_great {
-                self.bi_type = Pos; *self.get_nat_mut() -= rhs.get_nat();
-            } else {
-                self.bi_type = Neg; *self.get_nat_mut() -=  rhs.get_nat();
+        bi_pos_neg_mat_macro!(
+            self,
+            rhs,
+            {
+                self.bi_type = Pos;
+                *self.get_nat_mut() += rhs.get_nat();
+            },
+            {
+                if is_great {
+                    self.bi_type = Pos;
+                    *self.get_nat_mut() -= rhs.get_nat();
+                } else {
+                    self.bi_type = Neg;
+                    *self.get_nat_mut() -= rhs.get_nat();
+                }
+            },
+            {
+                if is_great {
+                    self.bi_type = Neg;
+                    *self.get_nat_mut() -= rhs.get_nat();
+                } else {
+                    self.bi_type = Pos;
+                    *self.get_nat_mut() -= rhs.get_nat();
+                }
+            },
+            {
+                self.bi_type = Neg;
+                *self.get_nat_mut() += rhs.get_nat();
             }
-        }, {
-            if is_great {
-                self.bi_type = Neg; *self.get_nat_mut() -= rhs.get_nat();
-            } else {
-                self.bi_type = Pos; *self.get_nat_mut() -= rhs.get_nat();
-            }
-        }, {
-            self.bi_type = Neg; *self.get_nat_mut() += rhs.get_nat();
-        });
+        );
     }
 }
 
@@ -382,34 +401,60 @@ impl<'a, 'b> Sub<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn sub(self, rhs: &'b BigInt) -> Self::Output {
         let is_great = self.get_nat() >= rhs.get_nat();
-        bi_pos_neg_mat_macro!(self, rhs, {
-            BigInt {nat: self.get_nat() - rhs.get_nat(), bi_type: if is_great {Pos} else {Neg}}
-        }, {
-            BigInt {nat: self.get_nat() + rhs.get_nat(), bi_type: Pos}
-        }, {
-            BigInt {nat: self.get_nat() + rhs.get_nat(), bi_type: Neg}
-        }, {
-            BigInt {nat: self.get_nat() - rhs.get_nat(), bi_type: if is_great { Neg } else { Pos }}
-        })
+        bi_pos_neg_mat_macro!(
+            self,
+            rhs,
+            {
+                BigInt {
+                    nat: self.get_nat() - rhs.get_nat(),
+                    bi_type: if is_great { Pos } else { Neg },
+                }
+            },
+            {
+                BigInt {
+                    nat: self.get_nat() + rhs.get_nat(),
+                    bi_type: Pos,
+                }
+            },
+            {
+                BigInt {
+                    nat: self.get_nat() + rhs.get_nat(),
+                    bi_type: Neg,
+                }
+            },
+            {
+                BigInt {
+                    nat: self.get_nat() - rhs.get_nat(),
+                    bi_type: if is_great { Neg } else { Pos },
+                }
+            }
+        )
     }
 }
 
 impl<'b> SubAssign<&'b BigInt> for BigInt {
     fn sub_assign(&mut self, rhs: &'b BigInt) {
         let is_great = self.get_nat() >= rhs.get_nat();
-        bi_pos_neg_mat_macro!(self, rhs, {
-            self.bi_type = if is_great { Pos } else { Neg };
-            *self.get_nat_mut() -= rhs.get_nat();
-        }, {
-            self.bi_type = Pos;
-            *self.get_nat_mut() += rhs.get_nat();
-        }, {
-            self.bi_type = Neg;
-            *self.get_nat_mut() += rhs.get_nat();
-        }, {
-            self.bi_type = if is_great { Neg } else { Pos };
-            *self.get_nat_mut() -= rhs.get_nat();
-        });
+        bi_pos_neg_mat_macro!(
+            self,
+            rhs,
+            {
+                self.bi_type = if is_great { Pos } else { Neg };
+                *self.get_nat_mut() -= rhs.get_nat();
+            },
+            {
+                self.bi_type = Pos;
+                *self.get_nat_mut() += rhs.get_nat();
+            },
+            {
+                self.bi_type = Neg;
+                *self.get_nat_mut() += rhs.get_nat();
+            },
+            {
+                self.bi_type = if is_great { Neg } else { Pos };
+                *self.get_nat_mut() -= rhs.get_nat();
+            }
+        );
     }
 }
 
@@ -421,8 +466,11 @@ impl std::ops::Neg for &BigInt {
             bi_type: if self.is_zero() {
                 Pos
             } else {
-                match self.bi_type { Pos => Neg, Neg => Pos}
-            }
+                match self.bi_type {
+                    Pos => Neg,
+                    Neg => Pos,
+                }
+            },
         }
     }
 }
@@ -437,44 +485,44 @@ impl<'a, 'b> Mul<&'b BigInt> for &'a BigInt {
     }
 }
 
-impl <'b> MulAssign<&'b BigInt> for BigInt {
+impl<'b> MulAssign<&'b BigInt> for BigInt {
     fn mul_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() *= rhs.get_nat();
         self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg }
     }
 }
 
-impl <'a, 'b>  Div<&'b BigInt> for &'a BigInt {
+impl<'a, 'b> Div<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn div(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() / rhs.get_nat(),
-            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg }
+            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg },
         }
     }
 }
 
-impl <'b> DivAssign<&'b BigInt> for BigInt {
+impl<'b> DivAssign<&'b BigInt> for BigInt {
     fn div_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() /= rhs.get_nat();
         self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg };
     }
 }
 
-impl <'a, 'b> Rem<&'b BigInt> for &'a BigInt {
+impl<'a, 'b> Rem<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn rem(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() % rhs.get_nat(),
-            bi_type: if self.is_same_sign(rhs) { Pos } else {Neg },
+            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg },
         }
     }
 }
 
-impl <'b> RemAssign<&'b BigInt> for BigInt {
+impl<'b> RemAssign<&'b BigInt> for BigInt {
     fn rem_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() %= rhs.get_nat();
-        self.bi_type = if self.is_same_sign(rhs) { Pos } else {Neg};
+        self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg };
     }
 }
 
@@ -499,7 +547,11 @@ impl Shr<usize> for &BigInt {
     fn shr(self, rhs: usize) -> Self::Output {
         let nat = self.get_nat() >> rhs;
         BigInt {
-            bi_type: if &nat == &Nat::from_u8(0) { Pos } else { self.bi_type },
+            bi_type: if &nat == &Nat::from_u8(0) {
+                Pos
+            } else {
+                self.bi_type
+            },
             nat,
         }
     }
@@ -537,19 +589,30 @@ bi_impl_fmt_macro!(LowerHex, "{:x}");
 bi_impl_fmt_macro!(UpperHex, "{:X}");
 bi_impl_fmt_macro!(Debug, "{:x}");
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     macro_rules! test_bi_from_and_fmt_help {
-        ($Type: ty, $Fmt1: literal, $Fmt2: literal, $Si: ident, $Min: ident, $Max: ident) => { {
+        ($Type: ty, $Fmt1: literal, $Fmt2: literal, $Si: ident, $Min: ident, $Max: ident) => {{
             let min_str = format!($Fmt1, $Si, $Min);
             let max_str = format!($Fmt1, '+', $Max);
             let bi_max = BigInt::from(<$Type>::max_value());
             let bi_min = BigInt::from(<$Type>::min_value());
-            assert_eq!(format!($Fmt2, bi_max), max_str, "{}->{}", stringify!($Type), $Fmt2);
-            assert_eq!(format!($Fmt2, bi_min), min_str, "{}->{}", stringify!($Type), $Fmt2);
+            assert_eq!(
+                format!($Fmt2, bi_max),
+                max_str,
+                "{}->{}",
+                stringify!($Type),
+                $Fmt2
+            );
+            assert_eq!(
+                format!($Fmt2, bi_min),
+                min_str,
+                "{}->{}",
+                stringify!($Type),
+                $Fmt2
+            );
         }};
     }
 
@@ -609,7 +672,10 @@ mod tests {
         assert_eq!(&l1 | &l2, l2);
         assert_eq!(&l1 ^ &l2, BigInt::from(0));
         assert_eq!(!&l1, BigInt::from(0));
-        assert_eq!(format!("{}", &l1 & &BigInt::nan()), format!("{}", BigInt::nan()));
+        assert_eq!(
+            format!("{}", &l1 & &BigInt::nan()),
+            format!("{}", BigInt::nan())
+        );
 
         let l1 = BigInt::from("0xfffffffffffffffffffffffffffffffffff3222222222222222222234900000000000000ffffffffffffffffffffff");
         let l2 = BigInt::from("0xff9000000000000000000000322222222222223209053065839583093285340530493058304593058390584");
@@ -644,7 +710,10 @@ mod tests {
         assert_eq!(&l1 + &l2, sum);
         l1 += &l2;
         assert_eq!(l1, sum);
-        assert_eq!(&l1 + &BigInt::from(1), BigInt::from("0x1ffffffffffffffffffffffffffffffff"));
+        assert_eq!(
+            &l1 + &BigInt::from(1),
+            BigInt::from("0x1ffffffffffffffffffffffffffffffff")
+        );
         let l1 = BigInt::from("0xfffffffffffffffffffffffffffffffffff3222222222222222222234900000000000000ffffffffffffffffffffff");
         let l2 = BigInt::from("0xff9000000000000000000000322222222222223209053065839583093285340530493058304593058390584");
         let sum = BigInt::from("0x10000000ff900000000000000000000032215444444444542b275287b82583093285340540493058304593058390583");
@@ -664,7 +733,10 @@ mod tests {
         let l1 = BigInt::from(std::u128::MAX);
         let l2 = BigInt::from(std::u8::MAX);
         assert_eq!(&l1 - &l1, BigInt::from(0));
-        assert_eq!(&l1 - &l2, BigInt::from(std::u128::MAX - (std::u8::MAX as u128)));
+        assert_eq!(
+            &l1 - &l2,
+            BigInt::from(std::u128::MAX - (std::u8::MAX as u128))
+        );
         assert_eq!(&l2 - &l1, -&(&l1 - &l2));
         let l1 = BigInt::from("0xfffffffffffffffffffffffffffffffffff3222222222222222222234900000000000000ffffffffffffffffffffff");
         let l2 = BigInt::from("0x32888f300000000000000322222229750348593045830670204");
@@ -718,5 +790,3 @@ mod tests {
         assert_eq!(&l1 % &l2, quo);
     }
 }
-
-
