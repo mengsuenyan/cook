@@ -33,4 +33,8 @@ pub trait GenericHasher: Hasher
 pub trait GenericHasherSum<T>: GenericHasher {
     /// 返回当前hash值
     fn sum(&self) -> T;
+    
+    fn sum_as(&self, _v: &T) -> T {
+        self.sum()
+    }
 }
