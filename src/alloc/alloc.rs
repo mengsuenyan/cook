@@ -21,7 +21,6 @@ impl fmt::Debug for AllocErr {
 }
 
 pub unsafe trait Alloc {
-    #[inline]
     fn new() -> Self;
     
     #[inline]
