@@ -1,12 +1,12 @@
 //! 连续线性缓存空间  
 //! 
 
-use crate::alloc::{Alloc, GlobalAllocator};
+use crate::alloc::{Alloc, DefaultAllocator};
 use std::ptr::NonNull;
 use std::alloc::Layout;
 use std::mem;
 
-pub struct LinearBuf<T, A: Alloc = GlobalAllocator> {
+pub struct LinearBuf<T, A: Alloc = DefaultAllocator> {
     ptr: NonNull<T>,
     cap: usize,
     a: A,
@@ -107,3 +107,17 @@ impl<T, A: Alloc> LinearBuf<T, A> {
         }
     }
 }
+
+impl<T, A: Alloc> Clone for LinearBuf<T, A> {
+    
+    fn clone(&self) -> Self {
+        let lb = LinearBuf::new(self.capacity());
+        unsafe {
+            self.as_ptr().copy_to(lb.as_ptr(), lb.capacity());
+        }
+        
+        lb
+    }
+}
+
+impl<T> Copy for LinearBuf<T, DefaultAllocator> {}

@@ -2,11 +2,12 @@ mod alloc;
 
 pub use alloc::{Alloc, AllocErr};
 
-pub struct GlobalAllocator;
+#[derive(Copy, Clone)]
+pub struct DefaultAllocator;
 
-unsafe  impl Alloc for GlobalAllocator {
+unsafe  impl Alloc for DefaultAllocator {
     #[inline]
     fn new() -> Self {
-        GlobalAllocator {}
+        DefaultAllocator {}
     }
 }
