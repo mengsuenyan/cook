@@ -4,6 +4,7 @@
 use std::alloc::{Layout};
 use std::fmt;
 use std::ptr::NonNull;
+use std::fmt::Formatter;
 
 pub struct AllocErr;
 
@@ -13,7 +14,16 @@ impl fmt::Display for AllocErr {
     }
 }
 
+impl fmt::Debug for AllocErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("memory allocation failed")
+    }
+}
+
 pub unsafe trait Alloc {
+    #[inline]
+    fn new() -> Self;
+    
     #[inline]
     unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
         NonNull::new(std::alloc::alloc(layout)).ok_or(AllocErr)

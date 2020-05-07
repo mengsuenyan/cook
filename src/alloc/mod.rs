@@ -5,5 +5,7 @@ pub use alloc::{Alloc, AllocErr};
 pub struct GlobalAllocator;
 
 unsafe  impl Alloc for GlobalAllocator {
-    
+    fn new() -> Self {
+        GlobalAllocator {}
+    }
 }
