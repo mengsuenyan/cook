@@ -1,4 +1,3 @@
-//! Rust 1.42.0版本Alloc是nightly-only API, 这里包装一层已待将来使用.
 //! 
 
 use std::alloc::{Layout};
@@ -47,9 +46,9 @@ pub trait Alloc {
     }
     
     #[inline]
-    fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Option<NonNull<Self::Item>> {
+    fn realloc(&mut self, ptr: NonNull<Self::Item>, layout: Layout, new_size: usize) -> Option<NonNull<Self::Item>> {
         unsafe {
-            NonNull::new(std::alloc::realloc(ptr.as_ptr(), layout, new_size))
+            NonNull::new(std::alloc::realloc(ptr.as_ptr().cast(), layout, new_size).cast())
         }
     }
 }
