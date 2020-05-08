@@ -20,26 +20,36 @@ impl fmt::Debug for AllocErr {
     }
 }
 
-pub unsafe trait Alloc {
+pub trait Alloc {
+    type Item;
+    
     fn new() -> Self;
     
     #[inline]
-    unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
-        NonNull::new(std::alloc::alloc(layout)).ok_or(AllocErr)
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<Self::Item>> {
+        unsafe {
+            NonNull::new(std::alloc::alloc(layout).cast())
+        }
     }
     
     #[inline]
-    unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
-        std::alloc::dealloc(ptr.as_ptr(), layout);
+    fn dealloc(&mut self, ptr: NonNull<Self::Item>, layout: Layout) {
+        unsafe {
+            std::alloc::dealloc(ptr.as_ptr().cast(), layout);
+        }
     }
 
     #[inline]
-    unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
-        NonNull::new(std::alloc::alloc_zeroed(layout)).ok_or(AllocErr)
+    fn alloc_zeroed(&mut self, layout: Layout) -> Option<NonNull<Self::Item>> {
+        unsafe {
+            NonNull::new(std::alloc::alloc_zeroed(layout).cast())
+        }
     }
     
     #[inline]
-    unsafe fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<NonNull<u8>, AllocErr> {
-        NonNull::new(std::alloc::realloc(ptr.as_ptr(), layout, new_size)).ok_or(AllocErr)
+    fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Option<NonNull<Self::Item>> {
+        unsafe {
+            NonNull::new(std::alloc::realloc(ptr.as_ptr(), layout, new_size))
+        }
     }
 }

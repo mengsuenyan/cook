@@ -1,11 +1,13 @@
 mod alloc;
 
-pub use alloc::{Alloc, AllocErr};
+pub use alloc::{Alloc};
 
 #[derive(Copy, Clone)]
-pub struct DefaultAllocator;
+pub struct DefaultAllocator<T>;
 
-unsafe  impl Alloc for DefaultAllocator {
+impl Alloc<T> for DefaultAllocator<T> {
+    type Item = T;
+    
     #[inline]
     fn new() -> Self {
         DefaultAllocator {}
