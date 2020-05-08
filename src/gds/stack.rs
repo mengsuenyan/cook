@@ -112,6 +112,12 @@ impl<T: fmt::Debug> fmt::Debug for Stack<T> {
     }
 }
 
+impl<T> Default for Stack<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod tests {
     #[test]
     fn stack() {
@@ -123,7 +129,7 @@ mod tests {
             assert_eq!(s, super::Stack::from_vec(&v));
         }
         
-        for i in 0..100usize {
+        for _ in 0..100usize {
             s.pop();
             v.pop();
             assert_eq!(s, super::Stack::from_vec(&v));
