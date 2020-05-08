@@ -1,10 +1,11 @@
 //! 通用数据结构
 //! 
 
-
+mod linked_list;
 mod linear_buf;
 mod stack;
 
+pub use linked_list::LinkedList;
 pub use linear_buf::LinearBuf;
 pub use stack::Stack;
 
