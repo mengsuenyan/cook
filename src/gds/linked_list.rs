@@ -5,6 +5,9 @@ use std::{fmt, cmp};
 use std::ptr::NonNull;
 use std::marker::PhantomData;
 
+#[cfg(test)]
+mod tests;
+
 struct Node<T> {
     next: Option<NonNull<Node<T>>>,
     prev: Option<NonNull<Node<T>>>,
@@ -293,13 +296,7 @@ impl<T> LinkedList<T> {
     
     pub fn find_by_val(&self, val: &T) -> Option<usize> 
         where T: PartialEq {
-        for (i, ele) in self.iter().enumerate() {
-            if ele == val {
-                return Some(i);
-            }
-        }
-        
-        None
+        self.iter().position(|x| {x == val})
     }
     
     /// 删除第idx个节点, 返回该位置的数据  
@@ -405,13 +402,32 @@ impl<'a, T> IntoIterator for &'a LinkedList<T> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
-    fn into_iter(self) -> Self::IntoIter {
+    fn into_iter(self) -> Iter<'a, T> {
         self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> IterMut<'a, T> {
+        self.iter_mut()
     }
 }
 
 impl<T> Default for LinkedList<T> {
     fn default() -> Self {
         LinkedList::new()
+    }
+}
+
+impl<T: PartialEq> PartialEq for LinkedList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other)
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.len() != other.len() || self.iter().ne(other)
     }
 }
