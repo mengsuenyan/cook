@@ -194,7 +194,7 @@ impl<T, A: Alloc<Item=T>> LinearBuf<T, A> {
                 };
 
                 unsafe {
-                    v.as_ptr().copy_to(self.as_ptr().add(pos), count);
+                    v.as_ptr().copy_to_nonoverlapping(self.as_ptr().add(pos), count);
                 }
             }
         }
