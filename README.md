@@ -5,12 +5,19 @@
 <span id='toc'></span>
 [TOC]
 
-
 ## [hash](#toc)
 
 - GenericHasher: 通用Hasher;
 - Adler32: Adler32算法哈希值生成器;
 - Fnv: Fnv算法哈希值生成器;
+
+## [gds](#toc)
+
+通用数据结构;
+
+- LinearBuf: 线性缓存;  
+- Stack: 栈;  
+- LinkedList: 双向链表;  
 
 ## [math](#toc)
 
