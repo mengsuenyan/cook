@@ -1,6 +1,7 @@
 //! 通用数据结构
 //! 
 
+mod bheap;
 mod bnode;
 mod bstree;
 mod linked_list;
@@ -12,6 +13,7 @@ pub use linear_buf::LinearBuf;
 pub use stack::Stack;
 pub use bnode::BNode;
 pub use bstree::BSTree;
+pub use bheap::BHeap;
 
 
 /// 容量分配策略  
