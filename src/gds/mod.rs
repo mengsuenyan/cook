@@ -1,6 +1,8 @@
 //! 通用数据结构
 //! 
 
+mod bnode;
+mod bstree;
 mod linked_list;
 mod linear_buf;
 mod stack;
@@ -8,6 +10,8 @@ mod stack;
 pub use linked_list::LinkedList;
 pub use linear_buf::LinearBuf;
 pub use stack::Stack;
+pub use bnode::BNode;
+pub use bstree::BSTree;
 
 
 /// 容量分配策略  

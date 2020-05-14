@@ -294,6 +294,7 @@ impl<T> LinkedList<T> {
         itr.next()
     }
     
+    /// 查找val在链表中的索引  
     pub fn find_by_val(&self, val: &T) -> Option<usize> 
         where T: PartialEq {
         self.iter().position(|x| {x == val})

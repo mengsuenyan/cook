@@ -18,6 +18,8 @@
 - LinearBuf: 线性缓存;  
 - Stack: 栈;  
 - LinkedList: 双向链表;  
+- BNode: 二叉树节点;  
+- BSTree: 二叉搜索树;  
 
 ## [math](#toc)
 
