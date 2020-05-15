@@ -6,6 +6,7 @@
 
 // TODO: 从BSTree抽象过来
 
+use std::fmt;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use crate::gds::BNode;
@@ -422,7 +423,8 @@ impl<T> RBTree<T> {
                 std::mem::replace(y_node.right_mut(), z_copy);
             }
         }
-        
+
+        self.len += 1;
         self.insert_fixup(z_copy);
     }
     
@@ -614,6 +616,11 @@ impl<T> RBTree<T> {
             x
         };
 
+        unsafe {
+            Box::from_raw(z_copy.unwrap().as_ptr()).into_element();
+        }
+        self.len -= 1;
+        
         let y_node = RBTree::cvt_to_node_mut(&mut y);
         if y_node.property().is_black() {
             self.delete_fixup(x);
@@ -621,5 +628,235 @@ impl<T> RBTree<T> {
         
         true
     }
+
+    fn dfs(stack: &mut Vec<NodePtr<T>>, node: &NodeType<T>) {
+        let mut node = node.clone();
+
+        while node.is_some() {
+            let left = RBTree::cvt_to_node(&node).left().clone();
+            match node {
+                Some(x) => stack.push(x),
+                _ => {},
+            };
+            node = left;
+        }
+    }
+
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter {
+            stack: Vec::with_capacity(self.len()),
+            len: self.len,
+            phantom: PhantomData,
+        }
+    }
+    
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        IterMut {
+            stack: Vec::with_capacity(self.len()),
+            len: self.len(),
+            tree: self,
+            phantom: PhantomData,
+        }
+    }
 }
 
+impl<T> Default for RBTree<T> {
+    fn default() -> Self {
+        RBTree::new()
+    }
+}
+
+
+impl<T> IntoIterator for RBTree<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut v = Vec::with_capacity(self.len());
+
+        RBTree::dfs(&mut v, &self.root);
+
+        IntoIter {
+            tree: self,
+            stack: v,
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a RBTree<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut RBTree<T> {
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl<T> Drop for RBTree<T> {
+    fn drop(&mut self) {
+        let mut v = Vec::with_capacity(self.len());
+        RBTree::dfs(&mut v, &self.root);
+
+        match v.pop() {
+            Some(x) => unsafe {
+                let now_node = x.as_ref().right();
+                RBTree::dfs(&mut v, now_node);
+                Box::from_raw(x.as_ptr()).into_element();
+            },
+            _ => {}
+        };
+    }
+}
+
+
+impl<T: fmt::Debug> fmt::Debug for RBTree<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self).finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct Iter<'a, T: 'a> {
+    stack: Vec<NodePtr<T>>,
+    len: usize,
+    phantom: PhantomData<&'a BNode<T, RBTreeNodeProperty<T>>>,
+}
+
+/// 中序遍历二叉树  
+pub struct IterMut<'a, T: 'a> {
+    tree: &'a mut RBTree<T>,
+    stack: Vec<NodePtr<T>>,
+    len: usize,
+    phantom: PhantomData<&'a BNode<T, RBTreeNodeProperty<T>>>,
+}
+
+pub struct IntoIter<T> {
+    tree: RBTree<T>,
+    stack: Vec<NodePtr<T>>,
+    phantom: PhantomData<T>
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len == 0 {
+            None
+        } else {
+            match self.stack.pop() {
+                Some(x) => unsafe {
+                    let now_node = x.as_ref().right();
+                    RBTree::dfs(&mut self.stack, now_node);
+                    self.len -= 1;
+                    Some((*x.as_ptr()).element())
+                },
+                _ => None,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+
+    fn last(self) -> Option<Self::Item> {
+        match self.stack.first() {
+            Some(x) => unsafe {
+                match x.as_ref().right_most() {
+                    Some(y) => Some((*y.as_ptr()).element()),
+                    _ => Some((*x.as_ptr()).element()),
+                }
+            },
+            _ => None,
+        }
+    }
+}
+
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len == 0 {
+            None
+        } else {
+            match self.stack.pop() {
+                Some(x) => unsafe {
+                    let now_node = x.as_ref().right();
+                    RBTree::dfs(&mut self.stack, now_node);
+                    self.len -= 1;
+                    Some((*x.as_ptr()).element_mut())
+                },
+                _ => None,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+
+    fn last(mut self) -> Option<Self::Item> {
+        match self.stack.first_mut() {
+            Some(x) => unsafe {
+                match x.as_ref().right_most() {
+                    Some(y) => Some((*y.as_ptr()).element_mut()),
+                    _ => Some((*x.as_ptr()).element_mut()),
+                }
+            },
+            _ => None,
+        }
+    }
+}
+
+impl<'a, T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.tree.len() == 0 {
+            None
+        } else {
+            match self.stack.pop() {
+                Some(x) => unsafe {
+                    let now_node = x.as_ref().right();
+                    RBTree::dfs(&mut self.stack, now_node);
+                    self.tree.len -= 1;
+                    let x_box = Box::from_raw(x.as_ptr());
+                    Some(x_box.into_element())
+                },
+                _ => None,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.stack.len(), Some(self.stack.len()))
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Iter<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Iter").field(&self.len).finish()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IterMut<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("IterMut").field(&self.tree).finish()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("IntoIter").field(&self.tree).finish()
+    }
+}

@@ -483,9 +483,17 @@ impl<'a, T> IntoIterator for &'a mut BSTree<T> {
 
 impl<T> Drop for BSTree<T> {
     fn drop(&mut self) {
-        let mut itr = self.into_iter();
-        while let Some(_) = itr.next() {
-        }
+        let mut v = Vec::with_capacity(self.len());
+        BSTree::dfs(&mut v, &self.root);
+
+        match v.pop() {
+            Some(x) => unsafe {
+                let now_node = x.as_ref().right();
+                BSTree::dfs(&mut v, now_node);
+                Box::from_raw(x.as_ptr()).into_element();
+            },
+            _ => {}
+        };
     }
 }
 
