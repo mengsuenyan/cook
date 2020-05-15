@@ -75,11 +75,7 @@ impl<T, P> BNode<T, P> {
     pub fn parent_right(&self) -> (Option<NonNull<Self>>, Option<NonNull<Self>>) {
         if self.parent.is_some() {
             let node = BNode::inner_to_ref(self.parent());
-            if node.right.is_some() {
-                (self.parent, node.right)
-            } else {
-                (self.parent, None)
-            }
+            (self.parent, node.right)
         } else {
             (None, None)
         }
@@ -89,14 +85,23 @@ impl<T, P> BNode<T, P> {
     pub fn parent_left(&self) -> (Option<NonNull<Self>>, Option<NonNull<Self>>) {
         if self.parent.is_some() {
             let node = BNode::inner_to_ref(self.parent());
-            if node.left.is_some() {
-                (self.parent, node.left)
-            } else {
-                (self.parent, None)
-            }
+            (self.parent, node.left)
         } else {
             (None, None)
         }
+    }
+    
+    pub fn parent_left_right(&self) -> (Option<NonNull<Self>>, Option<NonNull<Self>>, Option<NonNull<Self>>) {
+        if self.parent.is_some() {
+            let node = BNode::inner_to_ref(self.parent());
+            (self.parent, node.left, node.right)
+        } else {
+            (None, None, None)
+        }
+    }
+    
+    pub fn left_right(&self) -> (Option<NonNull<Self>>, Option<NonNull<Self>>) {
+        (self.left, self.right)
     }
 }
 

@@ -21,6 +21,7 @@
 - BNode: 二叉树节点;  
 - BSTree: 二叉搜索树;  
 - BHeap: 二叉堆;  
+- RBTree: 红黑树;  
 
 ## [math](#toc)
 

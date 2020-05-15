@@ -6,6 +6,7 @@ mod bnode;
 mod bstree;
 mod linked_list;
 mod linear_buf;
+mod rbtree;
 mod stack;
 
 pub use linked_list::LinkedList;
@@ -14,6 +15,7 @@ pub use stack::Stack;
 pub use bnode::BNode;
 pub use bstree::BSTree;
 pub use bheap::BHeap;
+pub use rbtree::RBTree;
 
 
 /// 容量分配策略  

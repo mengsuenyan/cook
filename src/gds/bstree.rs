@@ -222,6 +222,7 @@ impl<T> BSTree<T> {
         }
     }
     
+    /// note: 不要修改T的关键字, 否则树的性质改变;
     pub fn find_mut(&mut self, val: &T) -> Option<&mut T> 
         where T: PartialOrd
     {
