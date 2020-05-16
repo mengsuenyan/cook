@@ -215,10 +215,11 @@ impl<T> RBTree<T> {
         }
     }
     
-    ///
+    /// ```text
     ///      x          <----right_rotate----                y
     ///  xl     y       ---left_rotate-->                x     yr
     ///       yl yr                                   xl   yl
+    /// ```
     fn left_rotate(&mut self, mut x: NodeType<T>) {
         if x.is_none() {
             return;
