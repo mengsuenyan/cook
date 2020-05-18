@@ -7,7 +7,7 @@ use crate::crypto::md5::const_tables as mct;
 use std::hash::Hasher;
 use crate::hash::{GenericHasher, GenericHasherSum};
 
-pub struct Md5Cipher {
+pub struct Md5Digest {
     digest: [u32; 4],
     buf: [u8; mct::MD5_BLOCK_SIZE],
     idx: usize,
@@ -23,9 +23,9 @@ macro_rules! md5_upd_digest {
     };
 }
 
-impl Md5Cipher {
-    pub fn new() -> Md5Cipher {
-        Md5Cipher {
+impl Md5Digest {
+    pub fn new() -> Md5Digest {
+        Md5Digest {
             digest: mct::MD5_INIT,
             buf: [0; mct::MD5_BLOCK_SIZE],
             idx: 0,
@@ -132,7 +132,7 @@ impl Md5Cipher {
     
 }
 
-impl Hasher for Md5Cipher {
+impl Hasher for Md5Digest {
     fn finish(&self) -> u64 {
         let l = self.digest[0].to_le_bytes();
         let u = self.digest[1].to_le_bytes();
@@ -177,13 +177,13 @@ impl Hasher for Md5Cipher {
     }
 }
 
-impl GenericHasher for Md5Cipher {
+impl GenericHasher for Md5Digest {
     fn block_size(&self) -> usize {
         mct::MD5_BLOCK_SIZE
     }
     
     fn reset(&mut self) {
-        *self = Md5Cipher::new();
+        *self = Md5Digest::new();
     }
     
     fn size(&self) -> usize {
@@ -220,19 +220,19 @@ impl GenericHasher for Md5Cipher {
     }
 }
 
-impl GenericHasherSum<u128> for Md5Cipher {
+impl GenericHasherSum<u128> for Md5Digest {
     fn sum(&self) -> u128 {
         u128::from_be_bytes(self.sum_as(&[0u8;16]))
     }
 }
 
-impl GenericHasherSum<[u32; 4]> for Md5Cipher {
+impl GenericHasherSum<[u32; 4]> for Md5Digest {
     fn sum(&self) -> [u32; 4] {
         self.digest
     }
 }
 
-impl GenericHasherSum<[u8; 16]> for Md5Cipher {
+impl GenericHasherSum<[u8; 16]> for Md5Digest {
     fn sum(&self) -> [u8; 16] {
         let v0 = self.digest[0].to_le_bytes();
         let v1 = self.digest[1].to_le_bytes();
@@ -244,6 +244,12 @@ impl GenericHasherSum<[u8; 16]> for Md5Cipher {
             v2[0], v2[1], v2[2], v2[3],
             v3[0], v3[1], v3[2], v3[3],
         ]
+    }
+}
+
+impl Default for Md5Digest {
+    fn default() -> Self {
+        Md5Digest::new()
     }
 }
 
@@ -288,7 +294,7 @@ mod tests {
             (0x132f7619d33b523b1d9e5bd8e0928355u128, "How can you write a big system without C++?  -Paul Glick"),
         ];
         
-        let mut md5 = super::Md5Cipher::new();
+        let mut md5 = super::Md5Digest::new();
         for ele in cases.iter() {
             md5.write(ele.1.as_bytes());
             // println!("{:x}", md5.check_sum().unwrap().sum_as(&0u128));
