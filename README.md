@@ -29,6 +29,12 @@
 - BHeap: 二叉堆;  
 - RBTree: 红黑树;  
 
+## [ext_macro](#toc)
+
+扩展宏
+
+- cfg_if: 类似C语言if/elif/else宏定义;
+
 ## [math](#toc)
 
 ### [big](#toc)
@@ -36,6 +42,10 @@
 - Nat: 任意长度的自然数;  
 - BigInt: 任意长度的整数;  
 - BigFloat: 任意精度的浮点数(**待测试**);  
+
+### [complex](#toc)
+
+- Complex: 复数;
 
 ### [rand](#toc)
 
