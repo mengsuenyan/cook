@@ -12,7 +12,7 @@
 //!
 //! # Example
 //!
-//! ```
+//! ```Rust
 //! cfg_if::cfg_if! {
 //!     if #[cfg(unix)] {
 //!         fn foo() { /* unix specific functionality */ }
@@ -22,6 +22,7 @@
 //!         fn foo() { /* fallback implementation */ }
 //!     }
 //! }
+//! ```
 
 #[macro_export]
 macro_rules! cfg_if {

@@ -173,7 +173,6 @@ impl DesCipher {
         output |= (((v[5] << sl) | (v[6] >> sr)) as u64) << 40;
         let tmp = v[3] << 4;
         output |= (((v[6] << sl) | (tmp >> (8 - sl))) as u64) << 48;
-        println!("===>{:x},{:x}", key, output);
 
         output
     }
