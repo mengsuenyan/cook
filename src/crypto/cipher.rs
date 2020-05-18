@@ -7,8 +7,10 @@ pub trait Cipher {
     fn block_size(&self) -> usize;
     
     /// 加密明文数据data_block, 输出数据密文  
-    fn encrypt(&mut self, data_block: &[u8]) -> Vec<u8>;
+    /// data_block字节大小不等于block_size()时会panic  
+    fn encrypt(&mut self, dst: &mut Vec<u8>, data_block: &[u8]);
     
     /// 解密密文, 输出原始数据  
-    fn decrypt(&mut self, cipher_text: &[u8]) -> Vec<u8>;
+    /// data_block字节大小不等于block_size()时会panic  
+    fn decrypt(&mut self, dst: &mut Vec<u8>, cipher_text: &[u8]);
 }
