@@ -5,11 +5,17 @@
 <span id='toc'></span>
 [TOC]
 
+## [crypto](#toc)
+
+- Cipher: 加密算法需要实现的Trait;
+- DesCipher: DES加密算法;
+
 ## [hash](#toc)
 
-- GenericHasher: 通用Hasher;
+- GenericHasher: 通用Hasher Trait;
 - Adler32: Adler32算法哈希值生成器;
 - Fnv: Fnv算法哈希值生成器;
+- Crc32/Crc64: Crc校验器;
 
 ## [gds](#toc)
 
