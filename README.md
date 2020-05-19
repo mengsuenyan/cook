@@ -11,6 +11,8 @@
 - DesCipher: DES加密算法;
 - Md5Cipher: MD5消息摘要算法;
 - Sha1Digest: SHA-1安全散列算法;
+- Sha256Digest: SHA-256安全散列算法;
+- Sha224Digest: SHA-224安全散列算法;
 
 ## [hash](#toc)
 
@@ -56,3 +58,7 @@
 - RngSource: 随机数生成器;
 - NormalDistribution: 正态分布随机数;
 - UniformDistribution: 均匀分布随机苏;
+
+## [encoding](#toc)
+
+- Bytes: 字节序列相关辅助功能;

@@ -58,4 +58,10 @@ pub trait GenericHasherSum<T>: GenericHasher {
     fn sum_as(&self, _v: &T) -> T {
         self.sum()
     }
+    
+    /// 将当前的hash值拷贝到v中  
+    fn sum_copy_to(&self, v: &mut T) {
+        let t = self.sum();
+        *v = t
+    }
 }

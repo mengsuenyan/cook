@@ -4,7 +4,6 @@
 use crate::crypto::sha::const_tables as mct;
 use std::hash::Hasher;
 use crate::hash::{GenericHasher, GenericHasherSum};
-use crate::crypto::sha::const_tables::SHA1_BLOCK_SIZE;
 
 pub struct Sha1Digest {
     digest: [u32; mct::SHA1_DIGEST_WSIZE],
@@ -37,21 +36,6 @@ impl Sha1Digest {
     }
     
     #[inline]
-    fn f_ch(x: u32, y: u32, z: u32) -> u32 {
-        (x & y) ^ ((!x) & z)
-    }
-    
-    #[inline]
-    fn f_parity(x: u32, y: u32, z: u32) -> u32 {
-        (x ^ y) ^ z
-    }
-    
-    #[inline]
-    fn f_maj(x: u32, y: u32, z: u32) -> u32 {
-        (x & y) ^ (x & z) ^ (y & z)
-    }
-    
-    #[inline]
     fn f_word_extract(w: &mut [u32; mct::SHA1_BLOCK_SIZE/mct::SHA1_WORD_LEN], s: usize) -> u32 {
         w[s&0xf] = (w[(s+13)&0xf] ^ w[(s+8)&0xf] ^ w[(s+2)&0xf] ^ w[s&0xf]).rotate_left(1);
         // w[s&0xf] = (w[(s-3)&0xf] ^ w[(s-8)&0xf] ^ w[(s-14)&0xf] ^ w[(s-16)&0xf]).rotate_left(1);
@@ -77,35 +61,35 @@ impl Sha1Digest {
             
             let mut j = 0;
             while j < 16 {
-                let t = a.rotate_left(5).wrapping_add(Sha1Digest::f_ch(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[0]).wrapping_add(word[j]);
+                let t = a.rotate_left(5).wrapping_add(mct::f_ch(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[0]).wrapping_add(word[j]);
                 let b_p = b.rotate_left(30);
                 sha1_upd_digest!(a, b, c, d, e, t, a, b_p, c, d);
                 j += 1;
             }
             
             while j < 20 {
-                let t = a.rotate_left(5).wrapping_add(Sha1Digest::f_ch(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[0]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
+                let t = a.rotate_left(5).wrapping_add(mct::f_ch(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[0]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
                 let b_p = b.rotate_left(30);
                 sha1_upd_digest!(a, b, c, d, e, t, a, b_p, c, d);
                 j += 1;
             }
             
             while j < 40 {
-                let t = a.rotate_left(5).wrapping_add(Sha1Digest::f_parity(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[1]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
+                let t = a.rotate_left(5).wrapping_add(mct::f_parity(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[1]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
                 let b_p = b.rotate_left(30);
                 sha1_upd_digest!(a, b, c, d, e, t, a, b_p, c, d);
                 j += 1;
             }
             
             while j < 60 {
-                let t = a.rotate_left(5).wrapping_add(Sha1Digest::f_maj(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[2]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
+                let t = a.rotate_left(5).wrapping_add(mct::f_maj(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[2]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
                 let b_p = b.rotate_left(30);
                 sha1_upd_digest!(a, b, c, d, e, t, a, b_p, c, d);
                 j += 1;
             }
             
             while j < 80 {
-                let t = a.rotate_left(5).wrapping_add(Sha1Digest::f_parity(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[3]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
+                let t = a.rotate_left(5).wrapping_add(mct::f_parity(b, c, d)).wrapping_add(e).wrapping_add(mct::SHA1_K[3]).wrapping_add(Sha1Digest::f_word_extract(&mut word, j));
                 let b_p = b.rotate_left(30);
                 sha1_upd_digest!(a, b, c, d, e, t, a, b_p, c, d);
                 j += 1;
@@ -206,7 +190,7 @@ impl GenericHasher for Sha1Digest {
         if len % mct::SHA1_BLOCK_SIZE < 56 {
             self.write(&tmp[0..(56-(len%mct::SHA1_BLOCK_SIZE))]);
         } else {
-            self.write(&tmp[0..(64+56-(len%SHA1_BLOCK_SIZE))]);
+            self.write(&tmp[0..(64+56-(len%mct::SHA1_BLOCK_SIZE))]);
         }
         
         let len = (len as u64) << 3;
@@ -238,19 +222,17 @@ impl GenericHasherSum<[u8; 20]> for Sha1Digest {
     }
 }
 
+impl Default for Sha1Digest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::hash::Hasher;
+    use crate::encoding::Bytes;
     use crate::hash::{GenericHasher, GenericHasherSum};
-
-    fn cvt_bytes_to_str(b: &[u8]) -> String {
-        let mut s= String::new();
-        for &ele in b.iter() {
-            let e = format!("{:02x}", ele);
-            s.push_str(e.as_str());
-        }
-        s
-    }
     
     #[test]
     fn sha1() {
@@ -294,7 +276,7 @@ mod tests {
             sha1.write(ele.1.as_bytes());
             let s = sha1.check_sum().unwrap().sum();
             // println!("{}", cvt_bytes_to_str(&s[..]));
-            assert_eq!(cvt_bytes_to_str(&s[..]).as_str(), ele.0, "case=>{}", ele.1);
+            assert_eq!(Bytes::cvt_bytes_to_str(&s[..]).as_str(), ele.0, "case=>{}", ele.1);
             sha1.reset()
         }
     }
