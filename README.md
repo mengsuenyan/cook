@@ -13,6 +13,11 @@
 - Sha1Digest: SHA-1安全散列算法;
 - Sha256Digest: SHA-256安全散列算法;
 - Sha224Digest: SHA-224安全散列算法;
+- Sha512Digest: SHA-512安全散列算法;
+- Sha512T224Digest: SHA-512/224安全散列算法;
+- Sha512T256Digest: SHA-512/256安全散列算法;
+- Sha512T384Digest: SHA-512/384安全散列算法;
+- Sha512Digest::generate_sha512t: SHA-512/t384安全散列算法;
 
 ## [hash](#toc)
 
