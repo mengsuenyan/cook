@@ -10,6 +10,7 @@
 - Cipher: 加密算法需要实现的Trait;
 - DesCipher: DES加密算法;
 - Md5Cipher: MD5消息摘要算法;
+- Sha1Digest: SHA-1安全散列算法;
 
 ## [hash](#toc)
 
