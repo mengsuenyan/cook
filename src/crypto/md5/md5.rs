@@ -1,5 +1,5 @@
 //! MD5消息摘要算法  
-//! RFC-131  
+//! RFC-1321  
 //! https://www.cnblogs.com/mengsuenyan/p/12697709.html
 
 
@@ -137,7 +137,7 @@ impl Hasher for Md5Digest {
         let l = self.digest[0].to_le_bytes();
         let u = self.digest[1].to_le_bytes();
         let v = [l[0], l[1], l[2], l[3], u[0], u[1], u[2], u[3]];
-        u64::from_le_bytes(v)
+        u64::from_be_bytes(v)
     }
     
     fn write(&mut self, mut bytes: &[u8]) {
@@ -145,8 +145,8 @@ impl Hasher for Md5Digest {
         self.len += blen;
         
         if self.idx > 0 {
-            let dst = &mut self.buf[self.idx..];
             let min = std::cmp::min(mct::MD5_BLOCK_SIZE - self.idx, bytes.len());
+            let dst = &mut self.buf[self.idx..(self.idx+min)];
             let src = &bytes[0..min];
             dst.copy_from_slice(src);
             self.idx += min;
@@ -183,7 +183,9 @@ impl GenericHasher for Md5Digest {
     }
     
     fn reset(&mut self) {
-        *self = Md5Digest::new();
+        self.digest = mct::MD5_INIT;
+        self.idx = 0;
+        self.len = 0;
     }
     
     fn size(&self) -> usize {
