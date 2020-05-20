@@ -183,7 +183,7 @@ impl Cipher for DesCipher {
         mct::DES_BLOCK_SIZE
     }
 
-    fn encrypt(&mut self, dst: &mut Vec<u8>, data_block: &[u8]) {
+    fn encrypt(&self, dst: &mut Vec<u8>, data_block: &[u8]) {
         if data_block.len() == self.block_size() {
             let mut output = [0u8; 8];
             self.crypt_block(&mut output, data_block, true);
@@ -194,7 +194,7 @@ impl Cipher for DesCipher {
         }
     }
 
-    fn decrypt(&mut self, dst: &mut Vec<u8>, cipher_text: &[u8]) {
+    fn decrypt(&self, dst: &mut Vec<u8>, cipher_text: &[u8]) {
         if cipher_text.len() == self.block_size() {
             let mut output = [0u8; 8];
             self.crypt_block(&mut output, cipher_text, false);
@@ -298,7 +298,7 @@ mod tests {
         ];
 
         for ele in cases.iter() {
-            let mut cipher = super::DesCipher::new(ele.0);
+            let cipher = super::DesCipher::new(ele.0);
             let (mut encrypt, mut decrypt) = (Vec::with_capacity(8), Vec::with_capacity(8));
             
             cipher.encrypt(&mut encrypt, ele.1.as_ref());
