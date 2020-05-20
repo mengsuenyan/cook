@@ -18,6 +18,7 @@
 - Sha512T256Digest: SHA-512/256安全散列算法;
 - Sha512T384Digest: SHA-512/384安全散列算法;
 - Sha512Digest::generate_sha512t: SHA-512/t384安全散列算法;
+- Aes128Cipher/Aes192Cipher/Aes256Cipher: AES加密;  
 
 ## [hash](#toc)
 
