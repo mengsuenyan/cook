@@ -416,6 +416,20 @@ impl Nat {
     nat_from_basic_type!(from_u64, u64, 1);
     nat_from_basic_type!(from_u128, u128, 1);
     nat_from_basic_type!(from_usize, usize, 1);
+    
+    /// 如果self>u64::max_value, 那么会截断前64位返回;  
+    pub fn to_u64(&self) -> Option<u64> {
+        if self.is_nan() {
+            None
+        } else {
+            if self.nat.len() < 2 {
+                Some((*self.nat.first().unwrap()) as u64)
+            } else {
+                let (f, s) = (self.nat[0] as u64, self.nat[1] as u64);
+                Some((s << 32) | f)
+            }
+        }
+    }
 }
 
 impl<'a, 'b> Add<&'b Nat> for &'a Nat {

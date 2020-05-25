@@ -106,6 +106,73 @@ impl BigInt {
     pub fn is_nan(&self) -> bool {
         self.nat.is_nan()
     }
+    
+    pub fn abs(&self) -> Self {
+        BigInt {
+            nat: self.nat.clone(),
+            bi_type: BigIntType::Pos,
+        }
+    }
+
+    /// 求公约数, 返回(d, x, y), 其中:
+    /// d = gcd(self, other); d = self * x + other * y;  
+    /// 如果self和other为非自然数, 那么返回None, 否则返回Some((d, x, y));  
+    /// 
+    /// 特殊情况:  
+    /// gcd(a, 0) = a;  
+    /// gcd(0, 0) = 0;  
+    pub fn gcd(&self, other: &Self) -> Option<(BigInt, BigInt, BigInt)> {
+        let zero = BigInt::from(0);
+
+        if self.is_nan() || other.is_nan() {
+            None
+        } else if (self == &zero) && (other == &zero) {
+            Some((zero.clone(), zero.clone(), zero))
+        } else if (self == &zero) && (other != &zero) {
+            Some((other.abs(), zero, BigInt::from(1)))
+        } else if (self != &zero) && (other == &zero) {
+            Some((self.abs(), BigInt::from(1), zero))
+        } else {
+            Some(BigInt::gcd_extend(self, other))
+        }
+    }
+
+    fn gcd_extend(a: &Self, b: &Self) -> (BigInt, BigInt, BigInt) {
+        let zero = BigInt::from(0);
+        
+        if b == &zero {
+            (a.clone(), BigInt::from(1), BigInt::from(0))
+        } else {
+            let rem = a % b;
+            let div = a / b;
+            let (d_p, x_p, y_p) = BigInt::gcd_extend(b, &rem);
+            let yy = &x_p - &(&div * &y_p);
+            let (d, x, y) = (d_p, y_p, yy);
+            (d, x, y)
+        }
+    }
+    
+    /// <<算法导论>>  
+    /// 定理31.23: 若有d=gcd(a, n), 假设对于某些整数x'和y', 有d=ax'+ny'. 如果d|b, 则方程
+    /// ax=b(mod n)有一个解的值位x0, 则x0=x'(b/d) mod n;  
+    /// 假设方程ax=b(mod n)有解(即d|b, d=gcd(a,n)), 且x0是该方程的任意一个解. 因此, 该方程对模
+    /// n恰有d个不同的解, 分别为xi=x0+i(n/d), 这里i=0,1,...,d-1;  
+    pub fn mod_inverse(&self, other: &Self) -> Option<BigInt> {
+        let zero = BigInt::from(0);
+        
+        if self.is_nan() || other.is_nan() {
+            None
+        } else {
+            match self.gcd(other) {
+                Some(g) => if other < &zero {
+                    Some(other + &g.1)
+                } else {
+                    Some(g.1)
+                },
+                None => None
+            }
+        }
+    }
 }
 
 macro_rules! bi_impl_from_macro {
@@ -147,6 +214,24 @@ bi_impl_from_macro!(u32, USign);
 bi_impl_from_macro!(usize, USign);
 bi_impl_from_macro!(u64, USign);
 bi_impl_from_macro!(u128, USign);
+
+impl From<Vec<u8>> for BigInt {
+    fn from(v: Vec<u8>) -> Self {
+        BigInt {
+            nat: Nat::from_vec(&v),
+            bi_type: Pos,
+        }
+    }
+}
+
+impl Into<u64> for BigInt {
+    fn into(self) -> u64 {
+        match self.nat.to_u64() {
+            Some(x) => x,
+            _ => 0,
+        }
+    }
+}
 
 impl From<&str> for BigInt {
     fn from(s: &str) -> BigInt {

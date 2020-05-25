@@ -3,6 +3,9 @@ mod des;
 mod md5;
 mod sha;
 mod aes;
+mod rsa;
+
+pub mod rand;
 
 pub use cipher::Cipher;
 pub use des::DesCipher;
