@@ -360,7 +360,7 @@ impl Nat {
     /// 小端模式, 低字节是低位
     pub fn from_slice(v: &[u8]) -> Nat {
         match v.is_empty() {
-            true => {
+            false => {
                 let num = v.len() >> 2;
                 let num_arr = &v[0..(num << 2)];
                 let rem_arr = &v[(num << 2)..];
@@ -368,20 +368,18 @@ impl Nat {
 
                 let mut nat = Vec::with_capacity(num + 1);
                 for _ in 0..num {
-                    let b0 = *num_arr_itr.next().unwrap() as u32;
-                    let b1 = *num_arr_itr.next().unwrap() as u32;
-                    let b2 = *num_arr_itr.next().unwrap() as u32;
-                    let b3 = *num_arr_itr.next().unwrap() as u32;
-                    let ele = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+                    let barr = [*num_arr_itr.next().unwrap(),*num_arr_itr.next().unwrap(),*num_arr_itr.next().unwrap(),*num_arr_itr.next().unwrap()];
+                    // let ele = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+                    let ele = u32::from_le_bytes(barr);
                     nat.push(ele);
                 }
 
-                let mut val = 0u32;
-                for ele in rem_arr {
-                    val <<= 8;
-                    val += *ele as u32;
-                }
-                if val > 0 {
+                if !rem_arr.is_empty() {
+                    let mut val = 0u32;
+                    for  &ele in rem_arr.iter().rev() {
+                        val <<= 8;
+                        val += ele as u32;
+                    }
                     nat.push(val);
                 }
 
@@ -639,6 +637,67 @@ impl Nat {
             let (num, rem) = (idx >> 5, (idx % 32) as u32);
             let ele = self.as_vec()[num];
             (ele & (1u32 << rem)) != 0
+        }
+    }
+}
+
+impl From<u8> for Nat {
+    fn from(v: u8) -> Self {
+        Nat {
+            nat: vec![v as u32]
+        }
+    }
+}
+
+impl From<u16> for Nat {
+    fn from(v: u16) -> Self {
+        Nat {
+            nat: vec![v as u32]
+        }
+    }
+}
+
+impl From<u32> for Nat {
+    fn from(v: u32) -> Self {
+        Nat {
+            nat: vec![v]
+        }
+    }
+}
+
+impl From<u64> for Nat {
+    fn from(v: u64) -> Self {
+        let (fir, sec) = ((v & (u32::max_value() as u64)) as u32, (v >> 32) as u32);
+        Nat {
+            nat: vec![fir, sec],
+        }
+    }
+}
+
+impl From<usize> for Nat {
+    fn from(v: usize) -> Self {
+        let v = v.to_le_bytes();
+        let mut itr = v.iter();
+        let mut nat = Vec::new();
+        
+        let len = v.len() / 4;
+        for _ in 0..len {
+            let arr = [*itr.next().unwrap(), *itr.next().unwrap(), *itr.next().unwrap(), *itr.next().unwrap()];
+            nat.push(u32::from_le_bytes(arr));
+        }
+        
+        Nat {nat}
+    }
+}
+
+impl From<u128> for Nat {
+    fn from(v: u128) -> Self {
+        let (v0, v1, v2, v3) = ((v & (u32::max_value() as u128)) as u32,
+                                ((v>>32) & (u32::max_value() as u128)) as u32,
+                                ((v>>64) & (u32::max_value() as u128)) as u32,
+                                (v >> 96) as u32);
+        Nat {
+            nat: vec![v0, v1, v2, v3],
         }
     }
 }

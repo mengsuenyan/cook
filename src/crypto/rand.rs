@@ -1,4 +1,3 @@
-#![allow(unused)]
 //! 用于crypto随机数生成  
 
 use std::io::{Read, ErrorKind};
@@ -109,7 +108,8 @@ use gr_windows::get_random;
 
 #[cfg(target_os = "linux")]
 use gr_linux::get_random;
-use crate::math::big::BigInt;
+
+use crate::math::big::Nat;
 
 pub trait CryptoRng {}
 
@@ -146,14 +146,14 @@ const SMALL_PRIMES: [u8; 15] = [
 const SMALL_RIMES_PRODUCT: u64 = 16294579238595022365u64;
 
 /// 获取一个位长度为bits的质数  
-fn prime<Rand>(bits: usize) -> Result<BigInt, &'static str> 
+pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str> 
     where Rand: CryptoRng + Read + Default
 {
     if bits < 2 {
         return Err("crypto/rand: prime size must be at least 2-bit")
     }
 
-    let small_prime_product = BigInt::from(SMALL_RIMES_PRODUCT);
+    let small_prime_product = Nat::from_u64(SMALL_RIMES_PRODUCT);
     let mut rng = Rand::default();
 
     let b = match bits % 8 {
@@ -162,9 +162,7 @@ fn prime<Rand>(bits: usize) -> Result<BigInt, &'static str>
     } as u8;
     
     let mut bytes: Vec<u8> = Vec::new();
-    bytes.resize((bits + 7) / 8, 0);
-    
-    let mut p = BigInt::from(0);
+    bytes.resize((bits + 7) >> 3, 0);
     
     loop {
         match rng.read_exact(bytes.as_mut_slice()) {
@@ -174,7 +172,7 @@ fn prime<Rand>(bits: usize) -> Result<BigInt, &'static str>
         
         // 获取的随机数位长度大于bits, 清除最高位
         let bytes_last = bytes.last_mut().unwrap();
-        *bytes_last &= (1 << b) - 1;
+        *bytes_last &= ((1u32 << (b as u32)) - 1) as u8;
         // 移除了bytes超出bits位长度的高位, 但bits位长度的高位可能是0, 为了不让bytes太小
         // 高位填充位1
         if b >= 2 {
@@ -190,9 +188,9 @@ fn prime<Rand>(bits: usize) -> Result<BigInt, &'static str>
         // 保证bytes是奇数
         bytes[0] |= 0x1;
         
-        p = BigInt::from(bytes.clone());
+        let mut p = Nat::from_vec(&bytes);
         let bigmod = &p % &small_prime_product;
-        let modulus: u64 = bigmod.into();
+        let modulus: u64 = bigmod.to_u64().expect("Cannot convert NaN to u64's number");
         let mut delta = 0u64;
         'nextdelta: while delta < (1 << 20) {
             let m = modulus + delta;
@@ -204,16 +202,49 @@ fn prime<Rand>(bits: usize) -> Result<BigInt, &'static str>
             }
             
             if delta > 0 {
-                p += &BigInt::from(delta);
+                p += &Nat::from_u64(delta);
             }
             
-            delta += 2;
+            break;
         }
         
-        //todo: need to implement prime test
-        // if p.probaly_prime(20) && p.bit_len() == bits {
-        //      return Ok(p);
-        // }
-        return Ok(p);
+        if p.probably_prime(20) && p.bits_len() == bits {
+        // if p.probably_prime(20) {
+             return Ok(p);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::crypto::rand::CryptoRand;
+    use std::time::SystemTime;
+
+    #[test]
+    fn rand_prime() {
+        let his0 = SystemTime::now();
+        for i in 2..100 {
+            let his = SystemTime::now();
+            let nat = super::prime::<CryptoRand>(i);
+            assert!(nat.is_ok());
+            let nat = nat.unwrap();
+            println!("time: {:?}, case=>i{}->nat:{}:{}", SystemTime::now().duration_since(his), i, nat, nat.bits_len());
+        }
+        println!("total time: {:?}", SystemTime::now().duration_since(his0));
+
+        let cases = [
+            512,
+            1024,
+            // 2048,
+        ];
+        let his0 = SystemTime::now();
+        for &i in cases.iter() {
+            let his = SystemTime::now();
+            let nat = super::prime::<CryptoRand>(i);
+            assert!(nat.is_ok());
+            let nat = nat.unwrap();
+            println!("time: {:?}, case=>i{}->nat:{}:{}", SystemTime::now().duration_since(his), i, nat, nat.bits_len());
+        }
+        println!("total time: {:?}", SystemTime::now().duration_since(his0));
     }
 }

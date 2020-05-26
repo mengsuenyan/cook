@@ -72,6 +72,10 @@ impl BigInt {
             None => (Pos, s, 10),
         }
     }
+    
+    pub fn bits_len(&self) -> usize {
+        self.get_nat().bits_len()
+    }
 
     #[inline]
     fn get_nat(&self) -> &Nat {
