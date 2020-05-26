@@ -372,22 +372,19 @@ impl Nat {
     /// 二进制位长度
     #[inline]
     pub fn bits_len(&self) -> usize {
-        if self == &Nat::from_u8(0) {
-            return 1;
-        }
-
-        let num = self.num();
-        let mut cnt = 0usize;
-        let &last = self.as_vec().last().unwrap();
-        for i in 0..32u32 {
-            if (last & (1 << (31 - i))) == 0 {
-                cnt += 1;
+        if self.is_nan() {
+            0
+        } else if self.num() == 1 {
+            let first = *self.as_vec().first().unwrap();
+            if first == 0 {
+                1
             } else {
-                break;
+                (32 - first.leading_zeros()) as usize
             }
+        } else {
+            let (num, last) = (self.num()-1, *self.as_vec().last().unwrap());
+            (num << 5) + (32 - last.leading_zeros()) as usize
         }
-
-        ((num - 1) << 5) + (32 - cnt)
     }
     
     pub fn new(s: &str, base: u8) -> Nat {
@@ -606,6 +603,7 @@ impl Nat {
             let mut d = Nat::from_u8(1);
             for i in 0..bits_len {
                 d = &(&d * &d) % n;
+                
                 if b.check_bit_is_one(bits_len - i - 1, bits_len) {
                     d = &(&d * self) % n;
                 }
@@ -806,7 +804,7 @@ impl<'b> SubAssign<&'b Nat> for Nat {
 impl SubAssign<u32> for Nat {
     fn sub_assign(&mut self, rhs: u32) {
         let nat = &*self - rhs;
-        std::mem::replace(self, nat);
+        drop(std::mem::replace(self, nat));
     }
 }
 
@@ -1648,7 +1646,7 @@ mod tests {
         
         for ele in cases.iter() {
             let (a,b,n,res) = (Nat::from(ele.0), Nat::from(ele.1), Nat::from(ele.2), Nat::from(ele.3));
-            assert_eq!(a.pow_mod(&b, &n), res);
+            assert_eq!(a.pow_mod(&b, &n), res, "cases=>{}", ele.0);
         }
     }
     
