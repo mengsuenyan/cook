@@ -163,18 +163,8 @@ impl Nat {
     where
         T: PartialEq,
     {
-        let mut cnt = 0;
-        for ele in nat.iter().rev() {
-            if *ele == zero {
-                cnt += 1;
-            } else {
-                break;
-            }
-        }
-        if cnt == nat.len() {
-            nat.truncate(1);
-        } else {
-            nat.truncate(nat.len() - cnt);
+        while nat.len() > 1 && *nat.last().unwrap() == zero {
+            nat.pop();
         }
     }
     
@@ -200,35 +190,6 @@ impl Nat {
     #[inline]
     fn nan() -> Nat {
         Nat { nat: Vec::new() }
-    }
-
-    /// 右移超过val的位数时, 返回值为0
-    #[inline]
-    fn shr_as_c<T>(val: T, bits: T) -> T
-    where
-        T: Shr<Output = T> + From<u32> + PartialOrd + Copy,
-    {
-        let len: T = T::from((std::mem::size_of::<T>() << 3) as u32);
-
-        if bits < len {
-            val >> bits
-        } else {
-            T::from(0u32)
-        }
-    }
-
-    /// 左移超过val的位数时, 返回值为0
-    #[inline]
-    fn shl_as_c<T>(val: T, bits: T) -> T
-    where
-        T: Shl<Output = T> + From<u32> + PartialOrd + Copy,
-    {
-        let len = T::from((std::mem::size_of::<T>() << 3) as u32);
-        if bits < len {
-            val << bits
-        } else {
-            T::from(0u32)
-        }
     }
 
     #[inline]
@@ -258,10 +219,11 @@ impl Nat {
         nat.as_vec_mut().push(0u32);
         // 按32进制计算, 两数相乘最多不超过64位;
         for (i, &min_ele) in min.iter().enumerate() {
-            let mut round_nat = Nat {
-                nat: Vec::with_capacity(min.len() + max.len()),
-            };
-            let round = round_nat.as_vec_mut();
+            // let mut round_nat = Nat {
+            //     nat: Vec::with_capacity(min.len() + max.len()),
+            // };
+            // let round = round_nat.as_vec_mut();
+            let mut round = Vec::with_capacity(min.len() + max.len()) ;
             // 每一轮乘max都左移32位, 额外留出32位作为上一次单步乘的进位
             round.resize(i + 1, 0);
             for &max_ele in max {
@@ -274,28 +236,14 @@ impl Nat {
                     round.push(1);
                 }
             }
-            nat += &round_nat;
+            nat += &Nat{ nat: round};
         }
-
-        let mut cnt = 0usize;
-        for ele in nat.as_vec().iter().rev() {
-            if *ele == 0 {
-                cnt += 1;
-            } else {
-                break;
-            }
-        }
-
-        let len = nat.as_vec_mut().len();
-        if cnt == len {
-            nat.as_vec_mut().truncate(1);
-        } else {
-            nat.as_vec_mut().truncate(len - cnt);
-        }
+        
+        Self::trim_last_zeros(nat.as_vec_mut(), 0);
 
         nat
     }
-
+    
     #[inline]
     fn min_max_by_num<'a>(&'a self, rhs: &'a Nat) -> (&'a Vec<u32>, &'a Vec<u32>) {
         if self.num() < rhs.num() {
@@ -501,8 +449,47 @@ impl Nat {
             return false
         }
 
-        self.prime_validate_by_miller_rabin(n+1)
+        self.prime_validate_by_miller_rabin(n+1) && self.prime_validate_by_lucas()
     }
+
+    /// probablyPrimeLucas reports whether n passes the "almost extra strong" Lucas probable prime test,
+    /// using Baillie-OEIS parameter selection. This corresponds to "AESLPSP" on Jacobsen's tables (link below).
+    /// The combination of this test and a Miller-Rabin/Fermat test with base 2 gives a Baillie-PSW test.
+    ///
+    /// References:
+    ///
+    /// Baillie and Wagstaff, "Lucas Pseudoprimes", Mathematics of Computation 35(152),
+    /// October 1980, pp. 1391-1417, especially page 1401.
+    /// https://www.ams.org/journals/mcom/1980-35-152/S0025-5718-1980-0583518-6/S0025-5718-1980-0583518-6.pdf
+    ///
+    /// Grantham, "Frobenius Pseudoprimes", Mathematics of Computation 70(234),
+    /// March 2000, pp. 873-891.
+    /// https://www.ams.org/journals/mcom/2001-70-234/S0025-5718-00-01197-2/S0025-5718-00-01197-2.pdf
+    ///
+    /// Baillie, "Extra strong Lucas pseudoprimes", OEIS A217719, https://oeis.org/A217719.
+    ///
+    /// Jacobsen, "Pseudoprime Statistics, Tables, and Data", http://ntheory.org/pseudoprimes.html.
+    ///
+    /// Nicely, "The Baillie-PSW Primality Test", http://www.trnicely.net/misc/bpsw.html.
+    /// (Note that Nicely's definition of the "extra strong" test gives the wrong Jacobi condition,
+    /// as pointed out by Jacobsen.)
+    ///
+    /// Crandall and Pomerance, Prime Numbers: A Computational Perspective, 2nd ed.
+    /// Springer, 2005.
+    /// note: Miller-Rabin算法目前可以通过所有测试示例, 故lucas算法暂不实现
+    fn prime_validate_by_lucas(&self) -> bool {
+        // Baillie-OEIS "method C" for choosing D, P, Q,
+        // as in https://oeis.org/A217719/a217719.txt:
+        // try increasing P ≥ 3 such that D = P² - 4 (so Q = 1)
+        // until Jacobi(D, n) = -1.
+        // The search is expected to succeed for non-square n after just a few trials.
+        // After more than expected failures, check whether n is square
+        // (which would cause Jacobi(D, n) = 1 for all D not dividing n).
+        true
+    }
+    
+    // fn jacobi(&self, rhs: &Nat) -> isize {
+    // }
     
     /// miller-rabin素数测试   
     /// 对于任意奇数n>2和正整数s, miller-rabin素数测试出错的概率至多为2^(-s)  
@@ -649,7 +636,7 @@ impl Nat {
         if idx >= bits_len {
             false
         } else {
-            let (num, rem) = (idx / 32, (idx % 32) as u32);
+            let (num, rem) = (idx >> 5, (idx % 32) as u32);
             let ele = self.as_vec()[num];
             (ele & (1u32 << rem)) != 0
         }
@@ -708,11 +695,11 @@ impl<'a, 'b> Add<&'b Nat> for &'a Nat {
 
 impl<'b> AddAssign<&'b Nat> for Nat {
     fn add_assign(&mut self, rhs: &'b Nat) {
-        let mut result = &*self + rhs;
+        let result = &*self + rhs;
 
         let nat = self.as_vec_mut();
-        nat.clear();
-        nat.append(result.as_vec_mut());
+        nat.resize(result.num(), 0);
+        nat.copy_from_slice(result.as_vec())
     }
 }
 
@@ -793,11 +780,11 @@ impl Sub<u32> for &Nat {
 
 impl<'b> SubAssign<&'b Nat> for Nat {
     fn sub_assign(&mut self, rhs: &'b Nat) {
-        let mut result = &*self - rhs;
+        let result = &*self - rhs;
 
         let nat = self.as_vec_mut();
-        nat.clear();
-        nat.append(result.as_vec_mut());
+        nat.resize(result.num(), 0);
+        nat.copy_from_slice(result.as_vec());
     }
 }
 
@@ -812,11 +799,10 @@ impl<'a, 'b> Mul<&'b Nat> for &'a Nat {
     type Output = Nat;
 
     fn mul(self, rhs: &'b Nat) -> Self::Output {
-        let zero = Nat::from_u8(0);
         if self.is_nan() || rhs.is_nan() {
             return Nat::nan();
-        } else if self == &zero || rhs == &zero {
-            return zero;
+        } else if self == &0 || rhs == &0 {
+            return Nat::from_u8(0);
         }
 
         self.mul_manual(rhs)
@@ -893,12 +879,12 @@ impl<'a, 'b> Rem<&'b Nat> for &'a Nat {
             return self.clone();
         }
 
-        let num_len = self.bits_len();
+        // let num_len = self.bits_len();
         let den_len = rhs.bits_len();
-        if num_len == den_len {
-            return self - rhs;
-        }
-
+        // if num_len == den_len {
+        //     return self - rhs;
+        // }
+        //
         let mut self_copy = self.clone();
         loop {
             if self_copy < *rhs {
@@ -1144,42 +1130,44 @@ impl Shr<usize> for &Nat {
             return Nat::nan();
         }
 
-        let bits_len = self.bits_len();
-        if rhs >= bits_len {
-            Nat { nat: vec![0] }
+        let (num, rom) = (rhs >> 5, rhs % 32);
+        if self.num() <= num {
+            Nat::from_u8(0)
         } else {
-            let num = rhs / 32usize;
-            let rom = rhs % 32usize;
-            let mut nat = Vec::with_capacity(self.num() - num);
-            let arr = self.as_vec().as_slice();
-            let arr = &arr[num..];
-            if rom == 0 {
-                nat.extend_from_slice(arr);
-            } else {
-                let rom = rom as u32;
-                let mut arr_itr = arr.iter();
-                let mut pre = *arr_itr.next().unwrap();
-                for &ele in arr_itr {
-                    let val = (pre >> rom) | Nat::shl_as_c(ele, 32 - rom);
+            let mut nat = Vec::new();
+
+            let tmp = &self.as_vec()[num..];
+            if rom != 0 {
+                nat.reserve(self.num() - num);
+                let (rom_comp, rom) = ((32 - rom) as u32, rom as u32);
+                let mut itr = tmp.iter();
+                let mut pre = *itr.next().unwrap();
+                for &ele in itr {
+                    let val = (pre >> rom) | (ele << rom_comp);
                     pre = ele;
                     nat.push(val);
                 }
+                
                 let pre = pre >> rom;
                 if pre > 0 {
                     nat.push(pre);
                 }
+            } else {
+                nat.resize(self.num() - num, 0);
+                nat.copy_from_slice(tmp);
             }
-            Nat { nat }
+            
+            Nat {nat}
         }
     }
 }
 
 impl ShrAssign<usize> for Nat {
     fn shr_assign(&mut self, rhs: usize) {
-        let mut result = &*self >> rhs;
+        let result = &*self >> rhs;
         let nat = self.as_vec_mut();
-        nat.clear();
-        nat.append(result.as_vec_mut());
+        nat.resize(result.num(), 0);
+        nat.copy_from_slice(result.as_vec());
     }
 }
 
@@ -1191,21 +1179,29 @@ impl Shl<usize> for &Nat {
             return Nat::nan();
         }
 
-        let num = rhs / 32usize;
+        let num = rhs >> 5;
         let rom = rhs % 32usize;
         let mut nat: Vec<u32> = Vec::with_capacity(self.num() + num + 1);
-        nat.resize(num, 0u32);
-        let itr = self.as_vec().iter();
-        let mut pre = 0u32;
-        let rom = rom as u32;
-        for &ele in itr {
-            let val = (ele << rom) | pre;
-            pre = Nat::shr_as_c(ele, 32 - rom);
-            nat.push(val);
-        }
 
-        if pre > 0 {
-            nat.push(pre);
+        if rom != 0 {
+            nat.resize(num, 0u32);
+            let itr = self.as_vec().iter();
+            let mut pre = 0u32;
+            let rom = rom as u32;
+            let rom_comp = 32 - rom;
+            for &ele in itr {
+                let val = (ele << rom) | pre;
+                pre = ele >> rom_comp;
+                nat.push(val);
+            }
+
+            if pre > 0 {
+                nat.push(pre);
+            }
+        } else {
+            nat.resize(num + self.num(), 0);
+            let tmp = &mut nat.as_mut_slice()[num..];
+            tmp.copy_from_slice(self.as_vec().as_slice());
         }
 
         Nat { nat }
@@ -1214,10 +1210,10 @@ impl Shl<usize> for &Nat {
 
 impl ShlAssign<usize> for Nat {
     fn shl_assign(&mut self, rhs: usize) {
-        let mut result = &*self << rhs;
+        let result = &*self << rhs;
         let nat = self.as_vec_mut();
-        nat.clear();
-        nat.append(result.as_vec_mut());
+        nat.resize(result.num(), 0);
+        nat.copy_from_slice(result.as_vec());
     }
 }
 
@@ -1249,30 +1245,32 @@ impl PartialOrd for Nat {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
         if self.is_nan() || rhs.is_nan() {
             None
-        } else if self.num() > rhs.num() {
-            Some(Ordering::Greater)
-        } else if self.num() < rhs.num() {
-            Some(Ordering::Less)
         } else {
-            let mut relation = Some(Ordering::Equal);
+            let (lhs_lens, rhs_lens) = (self.num(), rhs.num());
+            
+            if lhs_lens > rhs_lens {
+                Some(Ordering::Greater)
+            } else if lhs_lens < rhs_lens {
+                Some(Ordering::Less)
+            } else {
+                let mut itr = rhs.as_vec().iter().rev();
+                for &min in self.as_vec().iter().rev() {
+                    match itr.next() {
+                        Some(&x) => {
+                            if min > x {
+                                return Some(Ordering::Greater);
+                            } else if min < x {
+                                return Some(Ordering::Less);
+                            }
+                        },
+                        _ => {
+                            return None;
+                        },
+                    };
+                }
 
-            let mut itr = rhs.as_vec().iter().rev();
-            'g: for min in self.as_vec().iter().rev() {
-                match itr.next() {
-                    Some(x) => {
-                        if min > x {
-                            relation = Some(Ordering::Greater);
-                            break 'g;
-                        } else if min < x {
-                            relation = Some(Ordering::Less);
-                            break 'g;
-                        }
-                    }
-                    _ => {}
-                };
+                Some(Ordering::Equal)
             }
-
-            relation
         }
     }
 }
@@ -1418,6 +1416,7 @@ impl Display for Nat {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
 
     macro_rules! test_nat_equal_tgt {
         ($tgt: ident, ($fuc_name:ident, $basic_type: ty)) => {
@@ -1682,13 +1681,94 @@ mod tests {
             "42307582002575910332922579714097346549017899709713998034217522897561970639123926132812109468141778230245837569601494931472367",                                 // Curve41417: 2^414-17
             "6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151", // E-521: 2^521-1
         ];
+        
+        let composites = [
+            "0",
+            "1",
+            "21284175091214687912771199898307297748211672914763848041968395774954376176754",
+            "6084766654921918907427900243509372380954290099172559290432744450051395395951",
+            "84594350493221918389213352992032324280367711247940675652888030554255915464401",
+            "82793403787388584738507275144194252681",
+
+            // Arnault, "Rabin-Miller Primality Test: Composite Numbers Which Pass It",
+            // Mathematics of Computation, 64(209) (January 1995), pp. 335-361.
+            // strong pseudoprime to prime bases 2 through 29
+            "1195068768795265792518361315725116351898245581",
+            // strong pseudoprime to all prime bases up to 200
+            "8038374574536394912570796143419421081388376882875581458374889175222974273765333652186502336163960045457915042023603208766569966760987284043965408232928738791850869166857328267761771029389697739470167082304286871099974399765441448453411558724506334092790222752962294149842306881685404326457534018329786111298960644845216191652872597534901",
+            
+            // Extra-strong Lucas pseudoprimes. https://oeis.org/A217719
+            "989",
+            "3239",
+            "5777",
+            "10877",
+            "27971",
+            "29681",
+            "30739",
+            "31631",
+            "39059",
+            "72389",
+            "73919",
+            "75077",
+            "100127",
+            "113573",
+            "125249",
+            "137549",
+            "137801",
+            "153931",
+            "155819",
+            "161027",
+            "162133",
+            "189419",
+            "218321",
+            "231703",
+            "249331",
+            "370229",
+            "429479",
+            "430127",
+            "459191",
+            "473891",
+            "480689",
+            "600059",
+            "621781",
+            "632249",
+            "635627",
+
+            "3673744903",
+            "3281593591",
+            "2385076987",
+            "2738053141",
+            "2009621503",
+            "1502682721",
+            "255866131",
+            "117987841",
+            "587861",
+
+            "6368689",
+            "8725753",
+            "80579735209",
+            "105919633",
+
+        ];
+        
         let s = 20usize;
         
+        let his0 = SystemTime::now();
         for &ele in cases.iter() {
             let nat = Nat::from(ele);
             // println!("{}, {}", nat, nat.probably_prime(s));
+            let his = SystemTime::now();
             assert!(nat.probably_prime(s), "case=>{}", ele);
+            println!("time: {:?}, case=>{}", SystemTime::now().duration_since(his), ele);
         }
+        
+        for &ele in composites.iter() {
+            let nat = Nat::from(ele);
+            let his = SystemTime::now();
+            assert!(!nat.probably_prime(s), "case=>{}", ele);
+            println!("time: {:?}, case=>{}", SystemTime::now().duration_since(his), ele);
+        }
+        println!("total time: {:?}", SystemTime::now().duration_since(his0));
     }
 }
 
