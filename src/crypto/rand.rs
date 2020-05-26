@@ -26,7 +26,7 @@ mod gr_windows {
             RtlGenRandom(r.as_mut_ptr(), r.len() as c_ulong)
         };
         
-        ret == 0
+        ret != 0
     }
 
     #[cfg(target_vendor = "uwp")]
