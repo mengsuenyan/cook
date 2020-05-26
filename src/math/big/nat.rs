@@ -9,6 +9,7 @@ use std::{
     },
     vec::Vec,
 };
+use crate::math::rand::{Seed, Source, RngSource};
 
 const HEX_BASIC_LEN: usize = 8;
 const DEC_BASIC_LEN: usize = 10;
@@ -176,6 +177,25 @@ impl Nat {
             nat.truncate(nat.len() - cnt);
         }
     }
+    
+    /// 返回以二进制表示时, 末尾的连续是0的个数  
+    fn trailling_zeros(&self) -> usize {
+        if self.is_nan() {
+            0
+        } else {
+            let mut cnt = 0usize;
+            for &ele in self.as_vec().iter() {
+                if ele == 0 {
+                    cnt += 32;
+                } else {
+                    cnt += ele.trailing_zeros() as usize;
+                    break;
+                }
+            }
+            
+            cnt
+        }
+    }
 
     #[inline]
     fn nan() -> Nat {
@@ -284,6 +304,27 @@ impl Nat {
             (&rhs.nat, &self.nat)
         }
     }
+    
+    fn parse_base(s: &str) -> Option<(u8, &str)> {
+        let s = s.trim();
+        if !s.is_empty() && s.is_ascii() {
+            let mut bytes = s.as_bytes().iter();
+            match bytes.next() {
+                Some(b'0') => {
+                    match bytes.next() { 
+                        Some(b'x') => Some((16, &s[2..])),
+                        Some(b'b') => Some((2, &s[2..])),
+                        Some(..) => Some((8, &s[1..])),
+                        _ => Some((10, s)),
+                    }
+                },
+                Some(..) => Some((10, s)),
+                None => None,
+            }
+        } else {
+            None
+        }
+    }
 
     fn check_str(s: &str, base: u8) -> Option<&[u8]> {
         let s = s.trim();
@@ -348,7 +389,7 @@ impl Nat {
 
         ((num - 1) << 5) + (32 - cnt)
     }
-
+    
     pub fn new(s: &str, base: u8) -> Nat {
         Nat::from_str(s, base)
     }
@@ -428,6 +469,206 @@ impl Nat {
                 let (f, s) = (self.nat[0] as u64, self.nat[1] as u64);
                 Some((s << 32) | f)
             }
+        }
+    }
+
+    /// 
+    pub fn probably_prime(&self, n: usize) -> bool {
+        let zero = Nat::from_u8(0);
+        if self.is_nan() || (self == &zero) {
+            return false;
+        }
+
+        const PRIME_BIT_MASK: u128 = 1<<2 | 1<<3 | 1<<5 | 1<<7 |
+            1<<11 | 1<<13 | 1<<17 | 1<<19 | 1<<23 | 1<<29 | 1<<31 |
+            1<<37 | 1<<41 | 1<<43 | 1<<47 | 1<<53 | 1<<59 | 1<<61 | 1<<67 |
+            1<<71 | 1<<73 | 1<<79 | 1<<83 | 1<<89 | 1<<97 | 1<<101 |
+            1<<103 | 1<<107 | 1<<109 | 1<< 113 | 1<<127;
+
+        let x = self.nat[0] as u128;
+        // 小素数直接判断
+        if (self.nat.len() == 1) && (x < 128) {
+            return ((1<<x) & PRIME_BIT_MASK) != 0;
+        }
+        
+        // 偶数
+        if x & 0x1 == 0 {
+            return false;
+        }
+
+        const PRIMES_A: u32 = 3 * 5 * 7 * 11 * 13 * 17 * 19 * 23 * 37;
+        const PRIMES_B: u32 = 29 * 31 * 41 * 43 * 47 * 53;
+        let (ra, rb) = ((self % PRIMES_A).unwrap(), (self % PRIMES_B).unwrap());
+        if ra%3 == 0 || ra%5 == 0 || ra%7 == 0 || ra%11 == 0 || ra%13 == 0 || ra%17 == 0 || ra%19 == 0 || ra%23 == 0 || ra%37 == 0 ||
+            rb%29 == 0 || rb%31 == 0 || rb%41 == 0 || rb%43 == 0 || rb%47 == 0 || rb%53 == 0 {
+            return false
+        }
+
+        self.prime_validate_by_miller_rabin(n+1)
+    }
+    
+    /// miller-rabin素数测试   
+    /// 对于任意奇数n>2和正整数s, miller-rabin素数测试出错的概率至多为2^(-s)  
+    /// 
+    /// note: 内部调用函数, self是大于2的奇数, s>0  
+    fn prime_validate_by_miller_rabin(&self, s: usize) -> bool {
+        let mut rng = RngSource::new(*self.as_vec().first().unwrap() as i64);
+        for _ in 0..s {
+            let a = Nat::random(&mut rng, self);
+            if a.miller_rabin_witness(self) {
+                return false;
+            }
+        }
+        
+        true
+    }
+    
+    /// 判断n是否是合数  
+    fn miller_rabin_witness(&self, n: &Nat) -> bool {
+        let n_m1 = n - 1u32;
+        let t = n_m1.trailling_zeros();
+        let u = &n_m1 >> t;
+        
+        let mut xi_m1 = self.pow_mod(&u, n);
+        for _ in 1..=t {
+            let xi = &(&xi_m1 * &xi_m1) % n;
+            if xi == 1 && xi_m1 != 1 && xi_m1 != n_m1 {
+                return true;
+            }
+            xi_m1 = xi;
+        }
+
+        xi_m1 != 1
+    }
+    
+    /// 产生一个[0, limit)之间的随机数  
+    fn random<Rng: Seed<i64> + Source<u64, i64>>(rand: &mut Rng, limit: &Nat) -> Nat {
+        if limit.is_nan() || limit == &0u32 {
+            return Nat::nan()
+        }
+
+        let bits_len = limit.bits_len();
+        let (num, rem) = ((bits_len + 31) / 32, (bits_len % 32) as u32);
+        let mut nat = Nat::from("");
+        nat.as_vec_mut().resize(num, 0u32);
+        let mask = if rem != 0 {
+            (1u32 << rem) - 1
+        } else {
+            u32::max_value()
+        };
+        
+        // let mut cnt = 0;
+        loop {
+        // while cnt < 10 {
+            let mut itr = nat.as_vec_mut().iter_mut();
+            while let Some(x) = itr.next() {
+                let r: u64 = rand.rng();
+                let (low, high) = ((r & (u32::max_value() as u64)) as u32, (r >> 32) as u32);
+                *x = low;
+                match itr.next() {
+                    Some(y) => *y = high,
+                    _ => {},
+                };
+            }
+            
+            *nat.as_vec_mut().last_mut().unwrap() &= mask;
+            if &nat < limit {
+                break;
+            }
+            // cnt += 1;
+        }
+        
+        // if cnt == 10 {
+        //     *nat.as_vec_mut().last_mut().unwrap() &= mask >> 1;
+        // }
+        
+        while nat.as_vec().len() > 1 && *nat.as_vec().last().unwrap() == 0 {
+            nat.as_vec_mut().pop();
+        }
+        
+        nat
+    }
+    
+    /// self^b mod n;  
+    /// 如果n==0, 那份结果是self^b;  
+    pub fn pow_mod(&self, b: &Nat, n: &Nat) -> Nat {
+        if self.is_nan() || b.is_nan() || n.is_nan() {
+            return Nat::nan();
+        }
+        
+        let bits_len = b.bits_len();
+        if n == &0u32 {
+            self.pow(b)
+        } else if n == &1u32 {
+            Nat::from_u8(0)
+        } else {
+            // 反复平方法 
+            let mut d = Nat::from_u8(1);
+            for i in 0..bits_len {
+                d = &(&d * &d) % n;
+                if b.check_bit_is_one(bits_len - i - 1, bits_len) {
+                    d = &(&d * self) % n;
+                }
+            }
+            
+            d
+        }
+    }
+    
+    pub fn pow(&self, b: &Nat) -> Nat {
+        if self.is_nan() || b.is_nan() {
+            return Nat::nan();
+        }
+        
+        let bits_len = b.bits_len();
+        if bits_len == 1 {
+            if (self == &0u32) && (b == &0u32) {
+                Nat::from_u8(1)
+            } else {
+                self.clone()
+            }
+        } else {
+            let mut pre = self.clone();
+            let mut cur = if b.check_bit_is_one(0, bits_len) {
+                self.clone()
+            } else { 
+                Nat::from_u8(1)
+            };
+            
+            for i in 1..bits_len {
+                pre = &pre * &pre;
+                if b.check_bit_is_one(i, bits_len) {
+                    cur = &cur * &pre;
+                }
+            }
+            
+            cur
+        }
+    }
+    
+    /// 调用者bits_len是当前自然数的位长度  
+    fn check_bit_is_one(&self, idx: usize, bits_len: usize) -> bool {
+        if idx >= bits_len {
+            false
+        } else {
+            let (num, rem) = (idx / 32, (idx % 32) as u32);
+            let ele = self.as_vec()[num];
+            (ele & (1u32 << rem)) != 0
+        }
+    }
+}
+
+impl Default for Nat {
+    fn default() -> Self {
+        Self::nan()
+    }
+}
+
+impl From<&str> for Nat {
+    fn from(s: &str) -> Self {
+        match Self::parse_base(s) {
+            Some((base, x)) => Self::from_str(x, base),
+            _ => Nat::nan()
         }
     }
 }
@@ -515,6 +756,43 @@ impl<'a, 'b> Sub<&'b Nat> for &'a Nat {
     }
 }
 
+impl Sub<u32> for &Nat {
+    type Output = Nat;
+
+    fn sub(self, rhs: u32) -> Nat {
+        if self.is_nan() {
+            Nat::nan()
+        } else if self.as_vec().len() == 1 {
+            let x = *self.as_vec().first().unwrap();
+            let y = if x > rhs {
+                x - rhs
+            } else {
+                rhs - x
+            };
+            Nat::from_u32(y)
+        } else {
+            let mut nat = Nat::nan();
+            
+            let mut itr = self.as_vec().iter();
+            let x = (*itr.next().unwrap()).overflowing_sub(rhs);
+            nat.as_vec_mut().push(x.0);
+            let mut cnt = x.1 as u32;
+            
+            for &ele in itr {
+                let y = ele.overflowing_sub(cnt);
+                cnt = y.1 as u32;
+                nat.as_vec_mut().push(y.0);
+            }
+            
+            while nat.as_vec().len() > 1 && *nat.as_vec().last().unwrap() == 0 {
+                nat.as_vec_mut().pop();
+            }
+            
+            nat
+        }
+    }
+}
+
 impl<'b> SubAssign<&'b Nat> for Nat {
     fn sub_assign(&mut self, rhs: &'b Nat) {
         let mut result = &*self - rhs;
@@ -522,6 +800,13 @@ impl<'b> SubAssign<&'b Nat> for Nat {
         let nat = self.as_vec_mut();
         nat.clear();
         nat.append(result.as_vec_mut());
+    }
+}
+
+impl SubAssign<u32> for Nat {
+    fn sub_assign(&mut self, rhs: u32) {
+        let nat = &*self - rhs;
+        std::mem::replace(self, nat);
     }
 }
 
@@ -634,12 +919,48 @@ impl<'a, 'b> Rem<&'b Nat> for &'a Nat {
     }
 }
 
+impl Rem<u32> for &Nat {
+    type Output = Option<u32>;
+    fn rem(self, rhs: u32) -> Self::Output {
+        if self.is_nan() || rhs == 0 {
+            return None;
+        }
+        
+        let (mut r, rhs) = (0, rhs as u64);
+        for &ele in self.as_vec().iter().rev() {
+            let m = ((r as u64) << 32) + (ele as u64);
+            if m < rhs {
+                r = m;
+            } else {
+                r = m % rhs;
+            }
+        }
+        
+        Some(r as u32)
+    }
+}
+
 impl<'b> RemAssign<&'b Nat> for Nat {
     fn rem_assign(&mut self, rhs: &'b Nat) {
         let mut result = &*self % rhs;
         let nat = self.as_vec_mut();
         nat.clear();
         nat.append(result.as_vec_mut());
+    }
+}
+
+impl RemAssign<u32> for Nat {
+    fn rem_assign(&mut self, rhs: u32) {
+        let res = &*self % rhs;
+        match res {
+            Some(x) => {
+                self.as_vec_mut().clear();
+                self.as_vec_mut().push(x);
+            },
+            None => {
+                self.as_vec_mut().clear();
+            },
+        }
     }
 }
 
@@ -667,6 +988,32 @@ impl<'a, 'b> BitAnd<&'b Nat> for &'a Nat {
         Nat::trim_last_zeros(&mut nat, 0);
 
         Nat { nat }
+    }
+}
+
+impl BitAnd<u32> for &Nat {
+    type Output = Option<u32>;
+    fn bitand(self, rhs: u32) -> Self::Output {
+        if self.is_nan() {
+            None
+        } else {
+            let first = self.as_vec()[0];
+            Some(first & rhs)
+        }
+    }
+}
+
+impl BitAndAssign<u32> for Nat {
+    fn bitand_assign(&mut self, rhs: u32) {
+        match &*self & rhs {
+            Some(x) => {
+                self.as_vec_mut().clear();
+                self.as_vec_mut().push(x);
+            },
+            None => {
+                self.as_vec_mut().clear();
+            }
+        }
     }
 }
 
@@ -886,6 +1233,20 @@ impl PartialEq for Nat {
     }
 }
 
+impl PartialEq<u32> for Nat {
+    fn eq(&self, rhs: &u32) -> bool {
+        if self.is_nan() {
+            false
+        } else {
+            if self.as_vec().len() == 1 {
+                self.as_vec().first().unwrap() == rhs
+            } else {
+                false
+            }
+        }
+    }
+}
+
 impl PartialOrd for Nat {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
         if self.is_nan() || rhs.is_nan() {
@@ -914,6 +1275,25 @@ impl PartialOrd for Nat {
             }
 
             relation
+        }
+    }
+}
+
+impl PartialOrd<u32> for Nat {
+    fn partial_cmp(&self, other: &u32) -> Option<Ordering> {
+        if self.is_nan() {
+            None
+        } else if self.as_vec().len() == 1 {
+            let first = self.as_vec().first().unwrap();
+            if first < other {
+                Some(Ordering::Less)
+            } else if first > other {
+                Some(Ordering::Greater)
+            } else {
+                Some(Ordering::Equal)
+            }
+        } else {
+            Some(Ordering::Greater)
         }
     }
 }
@@ -1173,6 +1553,7 @@ mod tests {
         let l1 = Nat::from_u128(std::u128::MAX);
         let l2 = Nat::from_u8(std::u8::MAX);
         assert_eq!(&l1 - &l1, Nat::from_u8(0));
+        assert_eq!(&l1 - 255u32, &l1 - &l2);
         assert_eq!(
             &l1 - &l2,
             Nat::from_u128(std::u128::MAX - (std::u8::MAX as u128))
@@ -1183,6 +1564,9 @@ mod tests {
         let sub = Nat::from_str("fffffffffffffffffffffffffffffffffff32222221ef9992f22222348ffffffcdddddde68afcb7a6cfba7cf98fdfb", 16);
         assert_eq!(&l1 - &l2, sub);
         assert_eq!(&l2 - &l1, sub);
+        let l1 = Nat::from_str("32f3289577420805237534573", 16);
+        let l2 = Nat::from_u32(u32::max_value());
+        assert_eq!(&l1 - &l2, &l1 - u32::max_value());
     }
 
     #[test]
@@ -1195,6 +1579,9 @@ mod tests {
         let l2 = Nat::from_str("f329053910428502fabcd9230494035242429890eacb", 16);
         let m = Nat::from_str("ec882250900ba90c2088a4a5ee549ecc5152d7a50683a82daa24e03f6d6409468abf1ce1f01d9be845021f48b", 16);
         assert_eq!(&l1 * &l2, m);
+        let left = Nat::from_u8(2);
+        let right = Nat::from_u8(125);
+        assert_eq!(left.pow(&right), Nat::from_u128(1<<125));
     }
 
     #[test]
@@ -1228,5 +1615,82 @@ mod tests {
         let l2 = Nat::from_str("ff", 16);
         let quo = Nat::from_str("d8", 16);
         assert_eq!(&l1 % &l2, quo);
+        assert_eq!(&l1 % 255u32, Some(0xd8u32));
+    }
+    
+    #[test]
+    fn pow_mod() {
+        let cases = [
+            ("0", "0", "0", "1"),
+            ("0", "0", "1", "0"),
+            ("1", "1", "1", "0"),
+            ("2", "1", "1", "0"),
+            ("2", "2", "1", "0"),
+            ("10", "100000000000", "1", "0"),
+            ("0x8000000000000000", "2", "0", "0x40000000000000000000000000000000"),
+            ("0x8000000000000000", "2", "6719", "4944"),
+            ("0x8000000000000000", "3", "6719", "5447"),
+            ("0x8000000000000000", "1000", "6719", "1603"),
+            ("0x8000000000000000", "1000000", "6719", "3199"),
+            (
+                "2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347",
+                "298472983472983471903246121093472394872319615612417471234712061",
+                "29834729834729834729347290846729561262544958723956495615629569234729836259263598127342374289365912465901365498236492183464",
+                "23537740700184054162508175125554701713153216681790245129157191391322321508055833908509185839069455749219131480588829346291",
+            ),
+            (
+                "11521922904531591643048817447554701904414021819823889996244743037378330903763518501116638828335352811871131385129455853417360623007349090150042001944696604737499160174391019030572483602867266711107136838523916077674888297896995042968746762200926853379",
+                "426343618817810911523",
+                "444747819283133684179",
+                "42",
+            ),
+        ];
+        
+        for ele in cases.iter() {
+            let (a,b,n,res) = (Nat::from(ele.0), Nat::from(ele.1), Nat::from(ele.2), Nat::from(ele.3));
+            assert_eq!(a.pow_mod(&b, &n), res);
+        }
+    }
+    
+    #[test]
+    fn prime_validate() {
+        let cases = [
+            "2",
+            "3",
+            "5",
+            "7",
+            "11",
+            "13756265695458089029",
+            "13496181268022124907",
+            "10953742525620032441",
+            "17908251027575790097",
+            
+            // https://golang.org/issue/638
+            "18699199384836356663",
+
+            "98920366548084643601728869055592650835572950932266967461790948584315647051443",
+            "94560208308847015747498523884063394671606671904944666360068158221458669711639",
+
+            // https://primes.utm.edu/lists/small/small3.html
+            "449417999055441493994709297093108513015373787049558499205492347871729927573118262811508386655998299074566974373711472560655026288668094291699357843464363003144674940345912431129144354948751003607115263071543163",
+            "230975859993204150666423538988557839555560243929065415434980904258310530753006723857139742334640122533598517597674807096648905501653461687601339782814316124971547968912893214002992086353183070342498989426570593",
+            "5521712099665906221540423207019333379125265462121169655563495403888449493493629943498064604536961775110765377745550377067893607246020694972959780839151452457728855382113555867743022746090187341871655890805971735385789993",
+            "203956878356401977405765866929034577280193993314348263094772646453283062722701277632936616063144088173312372882677123879538709400158306567338328279154499698366071906766440037074217117805690872792848149112022286332144876183376326512083574821647933992961249917319836219304274280243803104015000563790123",
+
+            // ECC primes: https://tools.ietf.org/html/draft-ladd-safecurves-02
+            "3618502788666131106986593281521497120414687020801267626233049500247285301239",                                                                                  // Curve1174: 2^251-9
+            "57896044618658097711785492504343953926634992332820282019728792003956564819949",                                                                                 // Curve25519: 2^255-19
+            "9850501549098619803069760025035903451269934817616361666987073351061430442874302652853566563721228910201656997576599",                                           // E-382: 2^382-105
+            "42307582002575910332922579714097346549017899709713998034217522897561970639123926132812109468141778230245837569601494931472367",                                 // Curve41417: 2^414-17
+            "6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151", // E-521: 2^521-1
+        ];
+        let s = 20usize;
+        
+        for &ele in cases.iter() {
+            let nat = Nat::from(ele);
+            // println!("{}, {}", nat, nat.probably_prime(s));
+            assert!(nat.probably_prime(s), "case=>{}", ele);
+        }
     }
 }
+
