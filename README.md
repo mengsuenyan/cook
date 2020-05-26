@@ -19,6 +19,8 @@
 - Sha512T384Digest: SHA-512/384安全散列算法;
 - Sha512Digest::generate_sha512t: SHA-512/t384安全散列算法;
 - Aes128Cipher/Aes192Cipher/Aes256Cipher: AES加密;  
+- rand::CryptoRng/rand::CryptoRand: 加密模块随机数trait, 及提供的加密模块默认随机数生成器;
+- rand::prime: 随机选择一个指定位数的质数;
 
 ## [hash](#toc)
 
