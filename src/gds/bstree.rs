@@ -316,13 +316,13 @@ impl<T> BSTree<T> {
             self.root = NonNull::new(Box::into_raw(Box::new(BNode::new(val, BSTreeNodeProperty))));
         } else {
             let mut z = BNode::new(val, BSTreeNodeProperty);
-            std::mem::replace(z.parent_mut(), y);
+            drop(std::mem::replace(z.parent_mut(), y));
             
             let node = BSTree::inner_to_mut(&mut y);
             if z.element() < node.element() {
-                std::mem::replace(node.left_mut(), NonNull::new(Box::into_raw(Box::new(z))));
+                drop(std::mem::replace(node.left_mut(), NonNull::new(Box::into_raw(Box::new(z)))));
             } else {
-                std::mem::replace(node.right_mut(), NonNull::new(Box::into_raw(Box::new(z))));
+                drop(std::mem::replace(node.right_mut(), NonNull::new(Box::into_raw(Box::new(z)))));
             }
         }
     }
@@ -337,14 +337,14 @@ impl<T> BSTree<T> {
             let (mut p, p_left) = cur.parent_left();
             let pn = BSTree::inner_to_mut(&mut p);
             if u == p_left {
-                std::mem::replace(pn.left_mut(), v);
+                drop(std::mem::replace(pn.left_mut(), v));
             } else {
-                std::mem::replace(pn.right_mut(), v);
+                drop(std::mem::replace(pn.right_mut(), v));
             }
             
             if v.is_some() {
                 let v = BSTree::inner_to_mut(&mut v);
-                std::mem::replace(v.parent_mut(), p);
+                drop(std::mem::replace(v.parent_mut(), p));
             }
         }
     }
@@ -369,15 +369,15 @@ impl<T> BSTree<T> {
             let yn = BSTree::inner_to_mut(&mut y);
             if yn.parent() != &z {
                 self.transplant(yc, yn.right().clone());
-                std::mem::replace(yn.right_mut(), zn.right().clone());
+                drop(std::mem::replace(yn.right_mut(), zn.right().clone()));
                 let yr_p = BSTree::inner_to_mut(yn.right_mut());
-                std::mem::replace(yr_p.parent_mut(), yc);
+                drop(std::mem::replace(yr_p.parent_mut(), yc));
             }
             
             self.transplant(z, yc);
-            std::mem::replace(yn.left_mut(), zn.left().clone());
+            drop(std::mem::replace(yn.left_mut(), zn.left().clone()));
             let yl_p = BSTree::inner_to_mut(yn.left_mut());
-            std::mem::replace(yl_p.parent_mut(), yc);
+            drop(std::mem::replace(yl_p.parent_mut(), yc));
         }
         
         let z_ptr = unsafe {

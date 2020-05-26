@@ -234,28 +234,28 @@ impl<T> RBTree<T> {
         }
         
         let y_node = RBTree::cvt_to_node_mut(&mut y);
-        std::mem::replace(x_node.right_mut(), y_node.left().clone());
+        drop(std::mem::replace(x_node.right_mut(), y_node.left().clone()));
         
         if y_node.left().is_some() {
             let y_left_node = RBTree::cvt_to_node_mut(y_node.left_mut());
-            std::mem::replace(y_left_node.parent_mut(), x_copy);
+            drop(std::mem::replace(y_left_node.parent_mut(), x_copy));
         }
         
-        std::mem::replace(y_node.parent_mut(), x_node.parent().clone());
+        drop(std::mem::replace(y_node.parent_mut(), x_node.parent().clone()));
         
         let (x_parent, mut x_parent_left) = x_node.parent_left();
         if x_parent.is_none() {
             self.root = y_copy;
         } else if x_copy == x_parent_left {
             let x_parent_left_node = RBTree::cvt_to_node_mut(&mut x_parent_left);
-            std::mem::replace(x_parent_left_node.left_mut(), y_copy);
+            drop(std::mem::replace(x_parent_left_node.left_mut(), y_copy));
         } else {
             let x_parent_left_node = RBTree::cvt_to_node_mut(&mut x_parent_left);
-            std::mem::replace(x_parent_left_node.right_mut(), y_copy);
+            drop(std::mem::replace(x_parent_left_node.right_mut(), y_copy));
         }
         
-        std::mem::replace(y_node.left_mut(), x_copy);
-        std::mem::replace(x_node.parent_mut(), y_copy);
+        drop(std::mem::replace(y_node.left_mut(), x_copy));
+        drop(std::mem::replace(x_node.parent_mut(), y_copy));
     }
     
     fn right_rotate(&mut self, mut y: NodeType<T>) {
@@ -273,27 +273,27 @@ impl<T> RBTree<T> {
         }
         
         let x_node = RBTree::cvt_to_node_mut(&mut x);
-        std::mem::replace(y_node.left_mut(), x_node.right().clone());
+        drop(std::mem::replace(y_node.left_mut(), x_node.right().clone()));
         
         if x_node.right().is_some() {
             let x_right_node = RBTree::cvt_to_node_mut(x_node.right_mut());
-            std::mem::replace(x_right_node.parent_mut(), y_copy);
+            drop(std::mem::replace(x_right_node.parent_mut(), y_copy));
         }
         
-        std::mem::replace(x_node.right_mut(), y_copy);
+        drop(std::mem::replace(x_node.right_mut(), y_copy));
         let (mut y_parent, y_parent_right) = y_node.parent_right();
         if y_parent.is_none() {
             self.root = x_copy;
         } else if y_copy == y_parent_right {
             let y_parent_node = RBTree::cvt_to_node_mut(&mut y_parent);
-            std::mem::replace(y_parent_node.right_mut(), x_copy);
+            drop(std::mem::replace(y_parent_node.right_mut(), x_copy));
         } else {
             let y_parent_node = RBTree::cvt_to_node_mut(&mut y_parent);
-            std::mem::replace(y_parent_node.left_mut(), x_copy);
+            drop(std::mem::replace(y_parent_node.left_mut(), x_copy));
         }
 
-        std::mem::replace(x_node.parent_mut(), y_node.parent().clone());
-        std::mem::replace(y_node.parent_mut(), x_copy);
+        drop(std::mem::replace(x_node.parent_mut(), y_node.parent().clone()));
+        drop(std::mem::replace(y_node.parent_mut(), x_copy));
     }
     
     /// 红黑树性质维持  
@@ -412,16 +412,16 @@ impl<T> RBTree<T> {
             }
         }
         
-        std::mem::replace(z_node.parent_mut(), y);
+        drop(std::mem::replace(z_node.parent_mut(), y));
         
         if y.is_none() {
             self.root = z;
         } else {
             let y_node = RBTree::cvt_to_node_mut(&mut y);
             if z_node.element() < y_node.element() {
-                std::mem::replace(y_node.left_mut(), z_copy);
+                drop(std::mem::replace(y_node.left_mut(), z_copy));
             } else {
-                std::mem::replace(y_node.right_mut(), z_copy);
+                drop(std::mem::replace(y_node.right_mut(), z_copy));
             }
         }
 
@@ -444,15 +444,15 @@ impl<T> RBTree<T> {
             self.root = v;
         } else if u_copy == u_parent_left {
             let u_parent_node = RBTree::cvt_to_node_mut(&mut u_parent);
-            std::mem::replace(u_parent_node.left_mut(), v);
+            drop(std::mem::replace(u_parent_node.left_mut(), v));
         } else {
             let u_parent_node = RBTree::cvt_to_node_mut(&mut u_parent);
-            std::mem::replace(u_parent_node.right_mut(), v);
+            drop(std::mem::replace(u_parent_node.right_mut(), v));
         }
         
         if v.is_some() {
             let v_node = RBTree::cvt_to_node_mut(&mut v);
-            std::mem::replace(v_node.parent_mut(), u_parent);
+            drop(std::mem::replace(v_node.parent_mut(), u_parent));
         }
     }
 
@@ -602,17 +602,17 @@ impl<T> RBTree<T> {
             if y_node.parent() != &z_copy {
                 self.transplant(y_copy, x);
                 let mut z_right = z_node.right().clone();
-                std::mem::replace(y_node.right_mut(), z_right);
+                drop(std::mem::replace(y_node.right_mut(), z_right));
                 let z_right_node = RBTree::cvt_to_node_mut(&mut z_right);
-                std::mem::replace(z_right_node.parent_mut(), y_copy);
+                drop(std::mem::replace(z_right_node.parent_mut(), y_copy));
             }
 
             self.transplant(z_copy, y_copy);
             *y_node.property_mut().color_mut() = z_pro.color().clone();
             let mut z_left = z_node.left().clone();
-            std::mem::replace(y_node.left_mut(), z_left);
+            drop(std::mem::replace(y_node.left_mut(), z_left));
             let z_left_node = RBTree::cvt_to_node_mut(&mut z_left);
-            std::mem::replace(z_left_node.parent_mut(), y_copy);
+            drop(std::mem::replace(z_left_node.parent_mut(), y_copy));
 
             x
         };
