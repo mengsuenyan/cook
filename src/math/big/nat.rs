@@ -11,6 +11,13 @@ use std::{
 };
 use crate::math::rand::{Seed, Source, RngSource};
 
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64 as march;
+
+#[cfg(target_arch = "x86")]
+use std::arch::x86 as march;
+use crate::encoding::Cvt;
+
 const HEX_BASIC_LEN: usize = 8;
 const DEC_BASIC_LEN: usize = 10;
 const OCT_BASIC_LEN: usize = 10; // 10 * 3 + 2
@@ -244,6 +251,146 @@ impl Nat {
         nat
     }
     
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn mul_by_avx2_decomp(com: &[(march::__m256i, march::__m256i); 8]) -> Nat {
+        let (mut arr, mut carry) = ([0u32; 16], 0u32);
+        let maskh = march::_mm256_setr_epi32(0, -1, 0, -1, 0, -1, 0, -1);
+        let maskl = march::_mm256_srli_epi64(maskh, 32);
+
+        for (i, ele) in com.iter().enumerate() {
+            let (mut tmp, mut c) = ([0u32;9], 0u32);
+            let (mut ltmp0, mut htmp0) = ([0u32; 8], [0u32;8]);
+            let (l0_ptr, h0_ptr) = (std::mem::transmute::<*mut u32, *mut i32>(ltmp0.as_mut_ptr()), 
+                                  std::mem::transmute::<*mut u32, *mut i32>(htmp0.as_mut_ptr()));
+            let (mut ltmp1, mut htmp1) = ([0u32; 8], [0u32;8]);
+            let (l1_ptr, h1_ptr) = (std::mem::transmute::<*mut u32, *mut i32>(ltmp1.as_mut_ptr()),
+                                  std::mem::transmute::<*mut u32, *mut i32>(htmp1.as_mut_ptr()));
+
+            march::_mm256_maskstore_epi32(l0_ptr, maskl, ele.0);
+            march::_mm256_maskstore_epi32(h0_ptr, maskh, ele.0);
+            march::_mm256_maskstore_epi32(l1_ptr, maskl, ele.1);
+            march::_mm256_maskstore_epi32(h1_ptr, maskh, ele.1);
+            let (l, h) = (
+                [ltmp0[0], ltmp0[2], ltmp0[4], ltmp0[6], ltmp1[0], ltmp1[2], ltmp1[4], ltmp1[6]],
+                [htmp0[1], htmp0[3], htmp0[5], htmp0[7], htmp1[1], htmp1[3], htmp1[5], htmp1[7]],
+                );
+            
+            tmp[0] = l[0];
+            for j in 1..8 {
+                let t0 = l[j].overflowing_add(h[j-1]);
+                let t1 = t0.0.overflowing_add(c);
+                tmp[j] = t1.0;
+                c = (t0.1 as u32) + (t1.1 as u32);
+            }
+            tmp[8] = h[7] + c;
+            
+            for (j, &ele) in tmp.iter().enumerate() {
+                let t0 = arr[i+j].overflowing_add(ele);
+                let t1 = t0.0.overflowing_add(carry);
+                arr[i+j] = t1.0;
+                carry = (t0.1 as u32) + (t1.1 as u32);
+            }
+
+            if carry > 0 {
+                arr[15] += carry;
+            }
+        }
+        
+        let mut nat = arr.to_vec();
+        Self::trim_last_zeros(&mut nat, 0);
+        Nat{nat}
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn mul_by_avx2_sub(mp: &[i32; 8], np: &[i32; 8]) -> [(march::__m256i, march::__m256i); 8] {
+        let m1 = march::_mm256_setr_epi32(mp[0], mp[4], mp[1], mp[5], mp[2], mp[6], mp[3], mp[7]);
+        let m2 = march::_mm256_srli_epi64(m1, 32);
+        let n1 = march::_mm256_set1_epi32(np[0]);
+        let n2 = march::_mm256_set1_epi32(np[1]);
+        let n3 = march::_mm256_set1_epi32(np[2]);
+        let n4 = march::_mm256_set1_epi32(np[3]);
+        let n5 = march::_mm256_set1_epi32(np[4]);
+        let n6 = march::_mm256_set1_epi32(np[5]);
+        let n7 = march::_mm256_set1_epi32(np[6]);
+        let n8 = march::_mm256_set1_epi32(np[7]);
+
+        let mn1l = march::_mm256_mul_epu32(m1, n1);
+        let mn2l = march::_mm256_mul_epu32(m1, n2);
+        let mn3l = march::_mm256_mul_epu32(m1, n3);
+        let mn4l = march::_mm256_mul_epu32(m1, n4);
+        let mn5l = march::_mm256_mul_epu32(m1, n5);
+        let mn6l = march::_mm256_mul_epu32(m1, n6);
+        let mn7l = march::_mm256_mul_epu32(m1, n7);
+        let mn8l = march::_mm256_mul_epu32(m1, n8);
+
+        let mn1h = march::_mm256_mul_epu32(m2, n1);
+        let mn2h = march::_mm256_mul_epu32(m2, n2);
+        let mn3h = march::_mm256_mul_epu32(m2, n3);
+        let mn4h = march::_mm256_mul_epu32(m2, n4);
+        let mn5h = march::_mm256_mul_epu32(m2, n5);
+        let mn6h = march::_mm256_mul_epu32(m2, n6);
+        let mn7h = march::_mm256_mul_epu32(m2, n7);
+        let mn8h = march::_mm256_mul_epu32(m2, n8);
+        [(mn1l, mn1h), (mn2l, mn2h), (mn3l, mn3h), (mn4l, mn4h),
+            (mn5l, mn5h), (mn6l, mn6h), (mn7l, mn7h), (mn8l, mn8h)]
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn mul_by_avx2(&self, rhs: &Nat) -> Nat {
+        let mut nat = Nat::from(0u8);
+        let (min, max) = self.min_max_by_num(rhs);
+        let min_num = if (min.len() & 0x7) > 0 { (min.len() >> 3) + 1} else {min.len() >> 3};
+        let max_num = if (max.len() & 0x7) > 0 { (max.len() >> 3) + 1} else {max.len() >> 3};
+        let (mut tmp_min, mut tmp_max) = (Vec::new(), Vec::new());
+        tmp_min.resize(min_num << 3, 0u32);
+        tmp_max.resize(max_num << 3, 0u32);
+        let tmp_min_s = &mut tmp_min[0..min.len()];
+        let tmp_max_s = &mut tmp_max[0..max.len()];
+        tmp_min_s.clone_from_slice(min.as_slice());
+        tmp_max_s.clone_from_slice(max.as_slice());
+        let mut min_itr  = tmp_min.iter();
+
+        for i in 0..min_num {
+            let n = [*min_itr.next().unwrap(), *min_itr.next().unwrap(), *min_itr.next().unwrap(), *min_itr.next().unwrap(),
+            *min_itr.next().unwrap(), *min_itr.next().unwrap(), *min_itr.next().unwrap(), *min_itr.next().unwrap()]; 
+            let np: &[i32; 8] = Cvt::reinterpret_cast(&n);
+            
+            let mut max_itr = tmp_max.iter();
+            for j in 0..max_num {
+                let m = [*max_itr.next().unwrap(), *max_itr.next().unwrap(), *max_itr.next().unwrap(), *max_itr.next().unwrap(),
+                    *max_itr.next().unwrap(), *max_itr.next().unwrap(), *max_itr.next().unwrap(), *max_itr.next().unwrap()];
+                let mp: &[i32; 8] = Cvt::reinterpret_cast(&m);
+
+                let mn = Self::mul_by_avx2_sub(mp, np);
+                let nat_sub = Self::mul_by_avx2_decomp(&mn);
+                let nat_sub = &nat_sub << ((i+j) << 8);
+
+                nat += &nat_sub;
+            }
+        }
+        
+        nat
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn mul_by_inst(&self, rhs: &Nat) -> Nat {
+        if is_x86_feature_detected!("avx2") {
+            unsafe {
+                self.mul_by_avx2(rhs)
+            }
+        } else {
+            self.mul_manual(rhs)
+        }
+    }
+    
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    fn mul_by_inst(&self, rhs: &Nat) -> Nat {
+        self.mul_manual(rhs)
+    }
+
     #[inline]
     fn min_max_by_num<'a>(&'a self, rhs: &'a Nat) -> (&'a Vec<u32>, &'a Vec<u32>) {
         if self.num() < rhs.num() {
@@ -668,8 +815,10 @@ impl From<u32> for Nat {
 impl From<u64> for Nat {
     fn from(v: u64) -> Self {
         let (fir, sec) = ((v & (u32::max_value() as u64)) as u32, (v >> 32) as u32);
+        let mut nat = vec![fir, sec];
+        Self::trim_last_zeros(&mut nat, 0);
         Nat {
-            nat: vec![fir, sec],
+            nat,
         }
     }
 }
@@ -686,6 +835,8 @@ impl From<usize> for Nat {
             nat.push(u32::from_le_bytes(arr));
         }
         
+        Self::trim_last_zeros(&mut nat, 0);
+        
         Nat {nat}
     }
 }
@@ -696,8 +847,10 @@ impl From<u128> for Nat {
                                 ((v>>32) & (u32::max_value() as u128)) as u32,
                                 ((v>>64) & (u32::max_value() as u128)) as u32,
                                 (v >> 96) as u32);
+        let mut nat= vec![v0, v1, v2, v3];
+        Self::trim_last_zeros(&mut nat, 0);
         Nat {
-            nat: vec![v0, v1, v2, v3],
+            nat,
         }
     }
 }
@@ -864,7 +1017,8 @@ impl<'a, 'b> Mul<&'b Nat> for &'a Nat {
             return Nat::from_u8(0);
         }
 
-        self.mul_manual(rhs)
+        // self.mul_manual(rhs)
+        self.mul_by_inst(rhs)
     }
 }
 
@@ -1627,10 +1781,20 @@ mod tests {
 
     #[test]
     fn test_nat_mul() {
+        assert_eq!(&Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") *
+                       &Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+                   Nat::from("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeff0000000000000000000000000000000000000000000000000000000000000001"));
+        assert_eq!(&Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") *
+        &Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+        Nat::from("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0000000000000000000000000000000000000000000000000000000000000001"));
+        assert_eq!(&Nat::from("2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347") *
+        &Nat::from("298472983472983471903246121093472394872319615612417471234712061"), 
+        Nat::from("877051800070821244789099242710450134536982682006837233541161511456161001386576641869116186901815671895415144768179824202865342118174193449288433467901275304066981993483906649666797167"));
         let l1 = Nat::from_u8(10);
         assert_eq!(&l1 * &l1, Nat::from_u8(100));
         assert_eq!(&l1 * &Nat::from_u8(0), Nat::from_u8(0));
         assert_eq!(&l1 * &Nat::from_u8(1), l1);
+        assert_eq!(&Nat::from(0xffffffu64) * &Nat::from(0xfffffffffu128), Nat::from(0xfffffefff000001u128));
         let l1 = Nat::from_str("f9058301048250fabddeabf9320480284932084552541", 16);
         let l2 = Nat::from_str("f329053910428502fabcd9230494035242429890eacb", 16);
         let m = Nat::from_str("ec882250900ba90c2088a4a5ee549ecc5152d7a50683a82daa24e03f6d6409468abf1ce1f01d9be845021f48b", 16);

@@ -48,3 +48,13 @@ fn prime_validate(b: &mut Bencher) {
     });
 }
 
+#[bench]
+fn nat_mul(b: &mut Bencher) {
+    b.iter(|| {
+        let l1 = Nat::from_str("f9058301048250fabddeabf9320480284932084552541", 16);
+        let l2 = Nat::from_str("f329053910428502fabcd9230494035242429890eacb", 16);
+        let m = Nat::from_str("ec882250900ba90c2088a4a5ee549ecc5152d7a50683a82daa24e03f6d6409468abf1ce1f01d9be845021f48b", 16);
+        assert_eq!(&l1 * &l2, m);
+    });
+}
+
