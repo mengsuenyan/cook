@@ -51,6 +51,15 @@ fn prime_validate(b: &mut Bencher) {
 #[bench]
 fn nat_mul(b: &mut Bencher) {
     b.iter(|| {
+        assert_eq!(&Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") *
+                       &Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+                   Nat::from("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeff0000000000000000000000000000000000000000000000000000000000000001"));
+        assert_eq!(&Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") *
+                       &Nat::from("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+                   Nat::from("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0000000000000000000000000000000000000000000000000000000000000001"));
+        assert_eq!(&Nat::from("2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347") *
+                       &Nat::from("298472983472983471903246121093472394872319615612417471234712061"),
+                   Nat::from("877051800070821244789099242710450134536982682006837233541161511456161001386576641869116186901815671895415144768179824202865342118174193449288433467901275304066981993483906649666797167"));
         let l1 = Nat::from_str("f9058301048250fabddeabf9320480284932084552541", 16);
         let l2 = Nat::from_str("f329053910428502fabcd9230494035242429890eacb", 16);
         let m = Nat::from_str("ec882250900ba90c2088a4a5ee549ecc5152d7a50683a82daa24e03f6d6409468abf1ce1f01d9be845021f48b", 16);
@@ -58,3 +67,56 @@ fn nat_mul(b: &mut Bencher) {
     });
 }
 
+#[bench]
+fn nat_rem(b: &mut Bencher) {
+    b.iter(|| {
+        let l1 = Nat::from_str("ffffffffffffff000000000000", 16);
+        let l2 = Nat::from_u8(255);
+        assert_eq!(&l1 % &l2, Nat::from_u8(0));
+        let l1 = Nat::from_str("39025820857032850384502853503850325fa3242de121", 16);
+        let l2 = Nat::from_str("2048537058358afedead392582075275", 16);
+        let rem = Nat::from_str("ab9de6183b632a33dc2601ae78da14e", 16);
+        assert_eq!(&l1 % &l2, rem);
+        let l1 = Nat::from_str("fffffffffff32908329058205820", 16);
+        let l2 = Nat::from_str("ff", 16);
+        let quo = Nat::from_str("d8", 16);
+        assert_eq!(&l1 % &l2, quo);
+        assert_eq!(&l1 % 255u32, Some(0xd8u32));
+    });
+}
+
+#[bench]
+fn nat_pow_mod(b: &mut Bencher) {
+    b.iter( || {
+        let cases = [
+            ("0", "0", "0", "1"),
+            ("0", "0", "1", "0"),
+            ("1", "1", "1", "0"),
+            ("2", "1", "1", "0"),
+            ("2", "2", "1", "0"),
+            ("10", "100000000000", "1", "0"),
+            ("0x8000000000000000", "2", "0", "0x40000000000000000000000000000000"),
+            ("0x8000000000000000", "2", "6719", "4944"),
+            ("0x8000000000000000", "3", "6719", "5447"),
+            ("0x8000000000000000", "1000", "6719", "1603"),
+            ("0x8000000000000000", "1000000", "6719", "3199"),
+            (
+                "2938462938472983472983659726349017249287491026512746239764525612965293865296239471239874193284792387498274256129746192347",
+                "298472983472983471903246121093472394872319615612417471234712061",
+                "29834729834729834729347290846729561262544958723956495615629569234729836259263598127342374289365912465901365498236492183464",
+                "23537740700184054162508175125554701713153216681790245129157191391322321508055833908509185839069455749219131480588829346291",
+            ),
+            (
+                "11521922904531591643048817447554701904414021819823889996244743037378330903763518501116638828335352811871131385129455853417360623007349090150042001944696604737499160174391019030572483602867266711107136838523916077674888297896995042968746762200926853379",
+                "426343618817810911523",
+                "444747819283133684179",
+                "42",
+            ),
+        ];
+
+        for ele in cases.iter() {
+            let (a,b,n,res) = (Nat::from(ele.0), Nat::from(ele.1), Nat::from(ele.2), Nat::from(ele.3));
+            assert_eq!(a.pow_mod(&b, &n), res, "cases=>{}", ele.0);
+        }
+    });
+}
