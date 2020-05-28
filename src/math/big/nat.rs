@@ -195,7 +195,7 @@ impl Nat {
     }
 
     #[inline]
-    fn nan() -> Nat {
+    pub fn nan() -> Nat {
         Nat { nat: Vec::new() }
     }
 
@@ -535,6 +535,10 @@ impl Nat {
     
     pub fn new(s: &str, base: u8) -> Nat {
         Nat::from_str(s, base)
+    }
+    
+    pub fn as_slice(&self) -> &[u32] {
+        self.as_vec().as_slice()
     }
 
     /// s必须是二进制/八进制/十进制/十六进制的数字字符串

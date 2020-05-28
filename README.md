@@ -21,6 +21,8 @@
 - Aes128Cipher/Aes192Cipher/Aes256Cipher: AES加密;  
 - rand::CryptoRng/rand::CryptoRand: 加密模块随机数trait, 及提供的加密模块默认随机数生成器;
 - rand::prime: 随机选择一个指定位数的质数;
+- PrivateKey/PublicKey: RSA私钥/公钥;
+- PKCS/PKCSType: PKCS RSA加密标准;
 
 ## [hash](#toc)
 

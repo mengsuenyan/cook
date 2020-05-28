@@ -177,6 +177,10 @@ impl BigInt {
             }
         }
     }
+    
+    pub fn to_nat(&self) -> Nat {
+        self.nat.clone()
+    }
 }
 
 macro_rules! bi_impl_from_macro {
@@ -223,6 +227,15 @@ impl From<Vec<u8>> for BigInt {
     fn from(v: Vec<u8>) -> Self {
         BigInt {
             nat: Nat::from_vec(&v),
+            bi_type: Pos,
+        }
+    }
+}
+
+impl From<Nat> for BigInt {
+    fn from(nat: Nat) -> Self {
+        BigInt {
+            nat,
             bi_type: Pos,
         }
     }
