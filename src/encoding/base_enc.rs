@@ -3,7 +3,7 @@
 //! https://www.cnblogs.com/mengsuenyan/p/12950518.html
 
 use BaseType::Base32;
-use crate::encoding::{Encoder, Decoder};
+use crate::encoding::{Encoder, Decoder, Transformer};
 use crate::encoding::base_enc::BaseType::{Base64, Base16};
 
 const BASE32_STD: [u8; 32] = [
@@ -419,6 +419,8 @@ impl Decoder for Base {
         }
     }
 }
+
+impl Transformer for Base {}
 
 #[cfg(test)]
 mod tests {
