@@ -4,7 +4,7 @@
 
 use BaseType::Base32;
 use crate::encoding::{Encoder, Decoder};
-use crate::encoding::base_enc::BaseType::Base64;
+use crate::encoding::base_enc::BaseType::{Base64, Base16};
 
 const BASE32_STD: [u8; 32] = [
     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'2', b'3', b'4', b'5', b'6', b'7',
@@ -22,9 +22,14 @@ const BASE64_URL: [u8; 64] = [
     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'-', b'_',
 ];
 
+const BASE16_STD: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F',
+];
+
 enum BaseType {
     Base32 {tbl: &'static [u8; 32], is_padding: bool},
     Base64 {tbl: &'static [u8; 64], is_padding: bool},
+    Base16 {tbl: &'static [u8; 16]},
 }
 
 pub struct Base {
@@ -70,10 +75,20 @@ impl Base {
         Base {base_type: Base64 {tbl: &BASE64_URL, is_padding}, d_map}
     }
     
+    pub fn base16() -> Base {
+        let mut d_map = [0xffu8; 256];
+        for (i, &ele) in BASE16_STD.iter().enumerate() {
+            d_map[ele as usize] = i as u8;
+        }
+        
+        Base {base_type: Base16 {tbl: &BASE16_STD}, d_map}
+    }
+    
     pub fn is_padding(&self) -> bool {
         match self.base_type {
             Base32{is_padding, ..} => is_padding,
             Base64 {is_padding, ..} => is_padding,
+            Base16 {..} => true,
         }
     }
     
@@ -85,6 +100,7 @@ impl Base {
             Base64 {tbl: _, is_padding: x} => {
                 *x = is_padding;
             },
+            Base16 {..} => {},
         }
     }
     
@@ -154,6 +170,7 @@ impl Base {
             return Ok(());
         }
         
+        let ori_len = dst.len();
         let rom = src.len() % 8;
         let mut pad_num = 0;
         
@@ -184,6 +201,7 @@ impl Base {
                 if ele != 0xff {
                     dst.push(ele);
                 } else {
+                    dst.resize(ori_len, 0);
                     return Err("Invalid decoded data");
                 }
             }
@@ -199,6 +217,7 @@ impl Base {
             if tmp[i] != 0xff {
                 dst.push(tmp[i]);
             } else {
+                dst.resize(ori_len, 0);
                 return Err("Invalid decoded data");
             }
         }
@@ -244,6 +263,7 @@ impl Base {
             return Ok(());
         }
         
+        let ori_len = dst.len();
         let mut pad_num = 0;
         if (src.len() & 0x3) == 0 {
             for &ele in src.iter().rev() {
@@ -261,6 +281,7 @@ impl Base {
             let buf = [tbl[*s.next().unwrap() as usize], tbl[*s.next().unwrap() as usize], 
                 tbl[*s.next().unwrap() as usize], tbl[*s.next().unwrap() as usize]];
             if buf[0] == 0xff || buf[1] == 0xff || buf[2] == 0xff || buf[3] == 0xff {
+                dst.resize(ori_len, 0);
                 return Err("Invalid decode data");
             }
             dst.push((buf[0] << 2) | (buf[1] >> 4));
@@ -273,6 +294,7 @@ impl Base {
             buf[i] = tbl[ele as usize];
         }
         if buf[0] == 0xff || buf[1] == 0xff || buf[2] == 0xff || buf[3] == 0xff {
+            dst.resize(ori_len, 0);
             return Err("Invalid decode data");
         }
         let (v1, v2) = ((buf[0] << 2) | (buf[1] >> 4), ((buf[1] & 0xf) << 4) | (buf[2] >> 2));
@@ -288,8 +310,41 @@ impl Base {
                 Ok(())
             }
             0 => Ok(()),
-            _ => Err("Invalid decode data")
+            _ => {
+                dst.resize(ori_len, 0);
+                Err("Invalid decode data")
+            },
         }
+    }
+    
+    fn base16_encode(&self, dst: &mut Vec<u8>, src: &[u8], tbl: &[u8; 16]) -> Result<(), &'static str> {
+        for &ele in src.iter() {
+            dst.push(tbl[(ele >> 4) as usize]);
+            dst.push(tbl[(ele & 0xf) as usize]);
+        }
+        Ok(())
+    }
+    
+    fn base16_decode(&self, dst: &mut Vec<u8>, src: &[u8], tbl: &[u8; 256]) -> Result<(), &'static str> {
+        if (src.len() & 0x1) > 0 {
+            return Err("Invalid decode data");
+        }
+        
+        let ori_len = dst.len();
+        let num = src.len() >> 1;
+        let mut s = src.iter();
+        
+        for _ in 0..num {
+            let (v1, v2) = (tbl[*s.next().unwrap() as usize], tbl[*s.next().unwrap() as usize]);
+            if v1 == 0xff || v2 == 0xff {
+                dst.resize(ori_len, 0);
+                return Err("Invalid decode data");
+            }
+            
+            dst.push((v1 << 4) | v2);
+        }
+        
+        Ok(())
     }
 }
 
@@ -306,6 +361,10 @@ impl Encoder for Base {
             Base64 {tbl, is_padding} => {
                 dst.clear();
                 self.base64_encode(dst, src, tbl, is_padding)
+            },
+            Base16 {tbl} => {
+                dst.clear();
+                self.base16_encode(dst, src, tbl)
             }
         }
     }
@@ -317,6 +376,9 @@ impl Encoder for Base {
             }, 
             Base64 {tbl, is_padding} => {
                 self.base64_encode(dst, src, tbl, is_padding)
+            },
+            Base16 {tbl} => {
+                self.base16_encode(dst, src, tbl)
             }
         }
     }
@@ -335,6 +397,10 @@ impl Decoder for Base {
             Base64 {..} => {
                 dst.clear();
                 self.base64_decode(dst, src, &self.d_map)
+            },
+            Base16 {..} => {
+                dst.clear();
+                self.base16_decode(dst, src, &self.d_map)
             }
         }
     }
@@ -346,6 +412,9 @@ impl Decoder for Base {
             },
             Base64 {..} => {
                 self.base64_decode(dst, src, &self.d_map)
+            },
+            Base16 {..} => {
+                self.base16_decode(dst, src, &self.d_map)
             }
         }
     }
@@ -469,6 +538,23 @@ mod tests {
             assert_eq!(String::from_utf8_lossy(v.as_slice()), ele.1);
             base.decode(&mut v, ele.1.as_bytes()).unwrap();
             assert_eq!(v.as_slice(), ele.0.as_ref());
+        }
+    }
+    
+    #[test]
+    fn base16() {
+        let cases = [
+            ("132", "313332"),
+            ("3242492302530jlfjsf9014-\\21943-=fsajfs9403", "333234323439323330323533306A6C666A7366393031342D5C32313934332D3D6673616A667339343033"),
+        ];
+        
+        let base = Base::base16();
+        let mut v= Vec::new();
+        for ele in cases.iter() {
+            base.encode(&mut v, ele.0.as_bytes()).unwrap();
+            assert_eq!(v.as_slice(), ele.1.as_bytes());
+            base.decode(&mut v, ele.1.as_bytes()).unwrap();
+            assert_eq!(v.as_slice(), ele.0.as_bytes());
         }
     }
 }

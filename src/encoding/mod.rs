@@ -8,7 +8,7 @@ pub trait Encoder {
     fn encode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>;
 
     /// 将数据编码为另一种形式存储在dst中, 数据会附加到dst尾部;  
-    fn encode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>{
+    fn encode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
         let mut buf = Vec::new();
         
         let r = self.encode(&mut buf, src);
@@ -24,8 +24,8 @@ pub trait Decoder {
     
     /// 将数据编码为另一种形式存储在dst中, dst原来数据会清零;  
     fn decode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>;
-    
-    fn decode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>{
+
+    fn decode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
         let mut buf = Vec::new();
         
         let r = self.decode(&mut buf, src);
