@@ -218,33 +218,33 @@ pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str>
 #[cfg(test)]
 mod tests {
     use crate::crypto::rand::CryptoRand;
-    use std::time::SystemTime;
+    use std::time::Instant;
 
     #[test]
     fn rand_prime() {
-        let his0 = SystemTime::now();
+        let his0 = Instant::now();
         for i in 2..100 {
-            let his = SystemTime::now();
+            let his = Instant::now();
             let nat = super::prime::<CryptoRand>(i);
             assert!(nat.is_ok());
             let nat = nat.unwrap();
-            println!("time: {:?}, case=>i{}->nat:{}:{}", SystemTime::now().duration_since(his), i, nat, nat.bits_len());
+            println!("time: {:?}, case=>i{}->nat:{}:{}", Instant::now().duration_since(his), i, nat, nat.bits_len());
         }
-        println!("total time: {:?}", SystemTime::now().duration_since(his0));
+        println!("total time: {:?}", Instant::now().duration_since(his0));
 
         let cases = [
             512,
             1024,
             // 2048,
         ];
-        let his0 = SystemTime::now();
+        let his0 = Instant::now();
         for &i in cases.iter() {
-            let his = SystemTime::now();
+            let his = Instant::now();
             let nat = super::prime::<CryptoRand>(i);
             assert!(nat.is_ok());
             let nat = nat.unwrap();
-            println!("time: {:?}, case=>i{}->nat:{}:{}", SystemTime::now().duration_since(his), i, nat, nat.bits_len());
+            println!("time: {:?}, case=>i{}->nat:{}:{}", Instant::now().duration_since(his), i, nat, nat.bits_len());
         }
-        println!("total time: {:?}", SystemTime::now().duration_since(his0));
+        println!("total time: {:?}", Instant::now().duration_since(his0));
     }
 }
