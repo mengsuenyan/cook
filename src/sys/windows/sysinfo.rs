@@ -94,6 +94,6 @@ impl CpuInfo {
 mod tests {
     #[test]
     fn cpu() {
-        dbg!("logical cpu nums: {}", super::cpu_logical_core_nums());
+        dbg!("logical cpu nums: {}", super::CpuInfo::cpu_logical_core_nums());
     }
 }
