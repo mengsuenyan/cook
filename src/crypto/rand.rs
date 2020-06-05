@@ -184,7 +184,11 @@ const SMALL_PRIMES: [u8; 15] = [
 
 const SMALL_RIMES_PRODUCT: u64 = 16294579238595022365u64;
 
-// 获取一个位长度为bits的质数  
+/// 获取一个位长度为bits的质数  
+/// 密钥生成  
+/// 记phi(n)为模n乘法群Z的规模;  
+/// 欧拉定理: 对于任意整数n>1, a^phi(n)=1(mod n)对所有a属于Z成立;  
+/// 费马定理: 如果p是质数, 则a^(p-1)=1(mod p)对于所有a属于Z成立;  
 #[cfg(prime_with_thread)]
 pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
     where Rand: CryptoRng + Read + Default
@@ -305,7 +309,7 @@ fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option
             break;
         }
 
-        if p.probably_prime(20) && p.bits_len() == bits {
+        if p.bits_len() == bits && p.probably_prime(20) {
             match sender { 
                 Some(s) => {
                     s.send(Ok(p)).unwrap();
