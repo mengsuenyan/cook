@@ -83,7 +83,7 @@ impl PrivateKey {
     /// 记phi(n)为模n乘法群Z的规模;  
     /// 欧拉定理: 对于任意整数n>1, a^phi(n)=1(mod n)对所有a属于Z成立;  
     /// 费马定理: 如果p是质数, 则a^(p-1)=1(mod p)对于所有a属于Z成立;  
-    pub fn generate_key<Rd>(bits: usize) -> Result<PrivateKey, &'static str>
+    pub fn generate_key<'a, Rd>(bits: usize) -> Result<PrivateKey, &'a str>
         where Rd: CryptoRng + Read + Default
     {
         // n = p * q

@@ -1,12 +1,21 @@
 //! 用于crypto随机数生成  
 
 use std::io::{Read, ErrorKind};
+use std::sync;
+use std::sync::{mpsc, atomic, Arc};
 
 #[cfg(target_os = "windows")]
 mod gr_windows {
     use std::os::raw::c_ulong;
+    
     #[cfg(target_vendor = "uwp")]
     use std::os::raw::c_long;
+
+    #[cfg(all(target_arch = "x86_64", support_rdrand))]
+    use core::arch::x86_64 as march;
+
+    #[cfg(all(target_arch = "x86", support_rdrand))]
+    use core::arch::x86 as march;
 
 
     extern "system" {
@@ -21,11 +30,40 @@ mod gr_windows {
     
     #[cfg(not(target_vendor = "uwp"))]
     pub fn get_random(r: &mut [u8]) -> bool {
-        let ret = unsafe {
-            RtlGenRandom(r.as_mut_ptr(), r.len() as c_ulong)
-        };
+        #[cfg(support_rdrand)]
+        unsafe {
+            let mut itr = r.iter_mut();
+
+            loop {
+                let mut rd = 0u64;
+                if march::_rdrand64_step(&mut rd) > 0 {
+                    let tmp = rd.to_le_bytes();
+                    for &ele in tmp.iter() {
+                        if let Some(y) = itr.next() {
+                            *y = ele;
+                        } else {
+                            return true;
+                        }
+                    }
+                } else {
+                    let mut rd = [0u8; 8];
+                    while RtlGenRandom(rd.as_mut_ptr(), rd.len() as c_ulong) != 0 {
+                        for &ele in rd.iter() {
+                            if let Some(y) = itr.next() {
+                                *y = ele;
+                            } else {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
-        ret != 0
+        #[cfg(not(support_rdrand))]
+        unsafe {
+            RtlGenRandom(r.as_mut_ptr(), r.len() as c_ulong) != 0
+        }
     }
 
     #[cfg(target_vendor = "uwp")]
@@ -110,6 +148,7 @@ use gr_windows::get_random;
 use gr_linux::get_random;
 
 use crate::math::big::Nat;
+use crate::sys::sysinfo::CpuInfo;
 
 pub trait CryptoRng {}
 
@@ -145,31 +184,90 @@ const SMALL_PRIMES: [u8; 15] = [
 
 const SMALL_RIMES_PRODUCT: u64 = 16294579238595022365u64;
 
-/// 获取一个位长度为bits的质数  
-pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str> 
+// 获取一个位长度为bits的质数  
+#[cfg(prime_with_thread)]
+pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
     where Rand: CryptoRng + Read + Default
 {
     if bits < 2 {
-        return Err("crypto/rand: prime size must be at least 2-bit")
+        return Err("crypto/rand: prime size must be at least 2-bit");
     }
 
-    let small_prime_product = Nat::from_u64(SMALL_RIMES_PRODUCT);
+    let exit_thread= sync::Arc::new(atomic::AtomicBool::new(true));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let cpu_nums = CpuInfo::cpu_logical_core_nums();
+
+    if bits < 1024 || (cpu_nums >> 1) == 0 {
+        return match prime_exe::<Rand>(bits,exit_thread.clone(), None) {
+            Some(x) => x,
+            None => Err("Cannot get a prime number!"),
+        };
+    }
+
+    let mut handle = Vec::new();
+    for i in 0..(cpu_nums >> 1) {
+        let tx_c = tx.clone();
+        let name = format!("prime thread {}", i);
+        let is_exit = exit_thread.clone();
+        let thread = std::thread::Builder::new().name(name).spawn(move || {
+            prime_exe::<Rand>(bits, is_exit, Some(tx_c));
+        }).unwrap();
+        handle.push(thread);
+    }
+
+    let mut result = Err("Cannot get a prime number!");
+    loop {
+        match rx.recv() {
+            Ok(t) => {
+                result = t;
+                break;
+            },
+            Err(_) => {
+                break;
+            },
+        }
+    }
+
+    exit_thread.store(false, atomic::Ordering::Relaxed);
+    for _ in 0..handle.len() {
+        handle.pop().unwrap().join().unwrap();
+    }
+
+    result
+}
+
+#[cfg(prime_with_thread)]
+fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option<mpsc::Sender<Result<Nat, &str>>>) -> Option<Result<Nat, &str>>
+    where Rand: CryptoRng + Read + Default
+{
+    // let small_prime_product = Nat::from_u64(SMALL_RIMES_PRODUCT);
     let mut rng = Rand::default();
 
     let b = match bits % 8 {
         0 => 8,
         x => x,
     } as u8;
-    
+
     let mut bytes: Vec<u8> = Vec::new();
     bytes.resize((bits + 7) >> 3, 0);
-    
-    loop {
+
+    while is_exit.load(atomic::Ordering::Relaxed) {
         match rng.read_exact(bytes.as_mut_slice()) {
-            Err(_e) => return Err("read random number failed"),
+            Err(_e) => {
+                match sender { 
+                    Some(s) => {
+                        match s.send(Err("read random number failed")) { 
+                            _ => {}
+                        }
+                    },
+                    None => {
+                    },
+                }
+                return Some(Err("read random number failed in the"));
+            },
             _ => {},
         };
-        
+
         // 获取的随机数位长度大于bits, 清除最高位
         let bytes_last = bytes.last_mut().unwrap();
         *bytes_last &= ((1u32 << (b as u32)) - 1) as u8;
@@ -184,10 +282,88 @@ pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str>
                 bytes[len - 2] |= 0x80;
             }
         }
-        
+
         // 保证bytes是奇数
         bytes[0] |= 0x1;
-        
+
+        let mut p = Nat::from_vec(&bytes);
+        let modulus = (&p % SMALL_RIMES_PRODUCT).unwrap();
+        let mut delta = 0;
+        'nextdelta: while delta < (1 << 20) {
+            let m = modulus + delta;
+            for &prime in SMALL_PRIMES.iter() {
+                if (m % (prime as u64) == 0) && (bits > 6 || m != (prime as u64)) {
+                    delta += 2;
+                    continue 'nextdelta;
+                }
+            }
+
+            if delta > 0 {
+                p += &Nat::from_u64(delta);
+            }
+
+            break;
+        }
+
+        if p.probably_prime(20) && p.bits_len() == bits {
+            match sender { 
+                Some(s) => {
+                    s.send(Ok(p)).unwrap();
+                    return None;
+                },
+                None => {
+                    return Some(Ok(p));
+                }
+            }
+        }
+    } // loop
+
+    None
+}
+
+#[cfg(not(prime_with_thread))]
+pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str> 
+    where Rand: CryptoRng + Read + Default
+{
+    if bits < 2 {
+        return Err("crypto/rand: prime size must be at least 2-bit")
+    }
+
+    let small_prime_product = Nat::from_u64(SMALL_RIMES_PRODUCT);
+    let mut rng = Rand::default();
+
+    let b = match bits % 8 {
+        0 => 8,
+        x => x,
+    } as u8;
+
+    let mut bytes: Vec<u8> = Vec::new();
+    bytes.resize((bits + 7) >> 3, 0);
+
+    loop {
+        match rng.read_exact(bytes.as_mut_slice()) {
+            Err(_e) => return Err("read random number failed"),
+            _ => {},
+        };
+
+        // 获取的随机数位长度大于bits, 清除最高位
+        let bytes_last = bytes.last_mut().unwrap();
+        *bytes_last &= ((1u32 << (b as u32)) - 1) as u8;
+        // 移除了bytes超出bits位长度的高位, 但bits位长度的高位可能是0, 为了不让bytes太小
+        // 高位填充位1
+        if b >= 2 {
+            *bytes_last |= 3 << (b - 2);
+        } else {
+            *bytes_last |= 1;
+            let len = bytes.len();
+            if len > 1 {
+                bytes[len - 2] |= 0x80;
+            }
+        }
+
+        // 保证bytes是奇数
+        bytes[0] |= 0x1;
+
         let mut p = Nat::from_vec(&bytes);
         let bigmod = &p % &small_prime_product;
         let modulus: u64 = bigmod.to_u64().expect("Cannot convert NaN to u64's number");
@@ -200,16 +376,15 @@ pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str>
                     continue 'nextdelta;
                 }
             }
-            
+
             if delta > 0 {
                 p += &Nat::from_u64(delta);
             }
-            
+
             break;
         }
-        
-        if p.probably_prime(20) && p.bits_len() == bits {
-        // if p.probably_prime(20) {
+
+        if p.bits_len() == bits && p.probably_prime(20) {
              return Ok(p);
         }
     }
@@ -235,7 +410,7 @@ mod tests {
         let cases = [
             512,
             1024,
-            // 2048,
+            2048,
         ];
         let his0 = Instant::now();
         for &i in cases.iter() {
