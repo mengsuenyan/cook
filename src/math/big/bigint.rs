@@ -7,7 +7,7 @@ use std::{
     ops::{
         Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
         DivAssign, Mul, MulAssign, Not, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub,
-        SubAssign,
+        SubAssign, Neg,
     },
 };
 
@@ -18,7 +18,6 @@ enum BigIntType {
     Pos = 0,
     Neg = 1,
 }
-use BigIntType::{Neg, Pos};
 
 /// 任意长度大整数BigInt
 ///
@@ -52,10 +51,10 @@ impl BigInt {
         let p3 = s_itr.next();
 
         let (bi_type, s1, s2, idx) = match p1 {
-            Some(b'+') => (Pos, p2, p3, 1),
-            Some(b'-') => (Neg, p2, p3, 1),
-            Some(_) => (Pos, p1, p2, 0),
-            _ => (Pos, p1, p2, 0),
+            Some(b'+') => (BigIntType::Pos, p2, p3, 1),
+            Some(b'-') => (BigIntType::Neg, p2, p3, 1),
+            Some(_) => (BigIntType::Pos, p1, p2, 0),
+            _ => (BigIntType::Pos, p1, p2, 0),
         };
 
         match s1 {
@@ -65,11 +64,11 @@ impl BigInt {
                     Some(b'X') => (bi_type, &s[(idx + 2)..], 16),
                     Some(b'b') => (bi_type, &s[(idx + 2)..], 2),
                     Some(_) => (bi_type, &s[(idx + 1)..], 8),
-                    None => (Pos, s, 10), // "0"
+                    None => (BigIntType::Pos, s, 10), // "0"
                 }
             }
             Some(_) => (bi_type, &s[idx..], 10),
-            None => (Pos, s, 10),
+            None => (BigIntType::Pos, s, 10),
         }
     }
     
@@ -91,18 +90,25 @@ impl BigInt {
     fn is_same_sign(&self, rhs: &BigInt) -> bool {
         self.bi_type == rhs.bi_type
     }
+    
+    #[inline]
+    fn is_pos(&self) -> bool {
+        match self.bi_type { 
+            BigIntType::Pos => true,
+            _ => false,
+        }
+    }
 
     #[inline]
     fn is_zero(&self) -> bool {
         self.get_nat() == &Nat::from_u8(0)
     }
 
-    #[allow(dead_code)]
     #[inline]
     fn nan() -> BigInt {
         BigInt {
-            bi_type: Pos,
-            nat: Nat::from_str("ff", 10),
+            bi_type: BigIntType::Pos,
+            nat: Nat::nan()
         }
     }
 
@@ -115,6 +121,39 @@ impl BigInt {
         BigInt {
             nat: self.nat.clone(),
             bi_type: BigIntType::Pos,
+        }
+    }
+    
+    // 除法定理: 对于任何整数a和任何正整数n, , 存在唯一整数q和r, 满足0<= r < n, 且self=d*n+r  
+    /// 对于任何整数a和任何非零整数n, , 存在唯一整数q和r, 满足0<= r < abs(n), 且self=d*n+r  
+    pub fn rem_euclid(&self, n: &BigInt) -> BigInt {
+        let tmp = self % n;
+        let zero = BigInt::from(0u8);
+        
+        if &tmp < &zero {
+            if n < &zero {
+                &tmp - n
+            } else {
+                &tmp + n
+            }
+        } else {
+            tmp
+        }
+    }
+
+    /// 对于任何整数a和任何非零整数n, , 存在唯一整数q和r, 满足0<= r < abs(n), 且self=d*n+r  
+    pub fn div_euclid(&self, n: &BigInt) -> BigInt {
+        let d = self / n;
+        let zero = BigInt::from(0u8);
+        
+        if &(self % n) < &zero {
+            if n > &zero {
+                &d - &BigInt::from(1u8)
+            } else {
+                &d + &BigInt::from(1u8)
+            }
+        } else {
+            d
         }
     }
 
@@ -133,11 +172,15 @@ impl BigInt {
         } else if (self == &zero) && (other == &zero) {
             Some((zero.clone(), zero.clone(), zero))
         } else if (self == &zero) && (other != &zero) {
-            Some((other.abs(), zero, BigInt::from(1)))
+            Some((other.abs(), BigInt::from(0), if other < &zero {BigInt::from(-1)} else {BigInt::from(1)}))
         } else if (self != &zero) && (other == &zero) {
-            Some((self.abs(), BigInt::from(1), zero))
+            Some((self.abs(), if self < &zero {BigInt::from(-1)} else {BigInt::from(1)}, zero))
         } else {
-            Some(BigInt::gcd_extend(self, other))
+            let (lhs, is_lhs_lz) = if self < &zero {(self.neg(), true)} else {(self.clone(), false)};
+            let (rhs, is_rhs_lz) = if other < &zero {(other.neg(), true)} else {(other.clone(), false)};
+            
+            let (d, x, y) = BigInt::gcd_extend(&lhs, &rhs);
+            Some((d, if is_lhs_lz {(&x).neg()} else {x}, if is_rhs_lz {(&y).neg()} else {y}))
         }
     }
 
@@ -167,11 +210,28 @@ impl BigInt {
         if self.is_nan() || other.is_nan() {
             None
         } else {
-            match self.gcd(other) {
-                Some(g) => if other < &zero {
-                    Some(other + &g.1)
-                } else {
-                    Some(g.1)
+            let n = if other < &zero {
+                other.abs()
+            } else {
+                other.clone()
+            };
+
+            let g = if self < &zero {
+                self.rem_euclid(&n)
+            } else {
+                self.clone()
+            };
+            let (g, n) = (&g, &n);
+            
+            // g*x + n*y = d
+            match &g.gcd(n) {
+                Some((_, x, _)) => {
+                    if x < &zero {
+                        // 转为大于0的数, 加上一个n的整数倍, mod n的结果不变
+                        Some(x + n)
+                    } else {
+                        Some(x.clone())
+                    }
                 },
                 None => None
             }
@@ -193,7 +253,7 @@ macro_rules! bi_impl_from_macro {
                     } else {
                         Nat::from_u128(val.abs() as u128)
                     },
-                    bi_type: if val < 0 { Neg } else { Pos },
+                    bi_type: if val < 0 { BigIntType::Neg } else { BigIntType::Pos },
                 }
             }
         }
@@ -203,7 +263,7 @@ macro_rules! bi_impl_from_macro {
             fn from(val: $Tgt) -> BigInt {
                 BigInt {
                     nat: Nat::from_u128(val as u128),
-                    bi_type: Pos,
+                    bi_type: BigIntType::Pos,
                 }
             }
         }
@@ -227,7 +287,7 @@ impl From<Vec<u8>> for BigInt {
     fn from(v: Vec<u8>) -> Self {
         BigInt {
             nat: Nat::from_vec(&v),
-            bi_type: Pos,
+            bi_type: BigIntType::Pos,
         }
     }
 }
@@ -236,7 +296,7 @@ impl From<Nat> for BigInt {
     fn from(nat: Nat) -> Self {
         BigInt {
             nat,
-            bi_type: Pos,
+            bi_type: BigIntType::Pos,
         }
     }
 }
@@ -272,7 +332,7 @@ macro_rules! bi_impl_from_vec_macro {
             fn from(v: &$Type) -> BigInt {
                 BigInt {
                     nat: Nat::$FromName(v),
-                    bi_type: Pos,
+                    bi_type: BigIntType::Pos,
                 }
             }
         }
@@ -299,13 +359,13 @@ impl PartialEq for BigInt {
 macro_rules! bi_pos_neg_mat_macro {
     ($Self:ident, $Rhs:ident, $PosPos:expr, $PosNeg:expr, $NegPos: expr, $NegNeg: expr) => {
         match $Self.bi_type {
-            Pos => match $Rhs.bi_type {
-                Pos => $PosPos,
-                Neg => $PosNeg,
+            BigIntType::Pos => match $Rhs.bi_type {
+                BigIntType::Pos => $PosPos,
+                BigIntType::Neg => $PosNeg,
             },
-            Neg => match $Rhs.bi_type {
-                Pos => $NegPos,
-                Neg => $NegNeg,
+            BigIntType::Neg => match $Rhs.bi_type {
+                BigIntType::Pos => $NegPos,
+                BigIntType::Neg => $NegNeg,
             },
         }
     };
@@ -354,14 +414,14 @@ impl<'a, 'b> BitAnd<&'b BigInt> for &'a BigInt {
     fn bitand(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() & rhs.get_nat(),
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Pos }, { Pos }, { Neg }),
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Pos }, { BigIntType::Pos }, { BigIntType::Neg }),
         }
     }
 }
 
 impl<'b> BitAndAssign<&'b BigInt> for BigInt {
     fn bitand_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Pos }, { Pos }, { Neg });
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Pos }, { BigIntType::Pos }, { BigIntType::Neg });
         *self.get_nat_mut() &= rhs.get_nat();
     }
 }
@@ -371,7 +431,7 @@ impl<'a, 'b> BitOr<&'b BigInt> for &'a BigInt {
 
     fn bitor(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Neg }),
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Neg }, { BigIntType::Neg }, { BigIntType::Neg }),
             nat: self.get_nat() | rhs.get_nat(),
         }
     }
@@ -379,7 +439,7 @@ impl<'a, 'b> BitOr<&'b BigInt> for &'a BigInt {
 
 impl<'b> BitOrAssign<&'b BigInt> for BigInt {
     fn bitor_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Neg });
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Neg }, { BigIntType::Neg }, { BigIntType::Neg });
         *self.get_nat_mut() |= rhs.get_nat();
     }
 }
@@ -388,7 +448,7 @@ impl<'a, 'b> BitXor<&'b BigInt> for &'a BigInt {
     type Output = BigInt;
     fn bitxor(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
-            bi_type: bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Pos }),
+            bi_type: bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Neg }, { BigIntType::Neg }, { BigIntType::Pos }),
             nat: self.get_nat() ^ rhs.get_nat(),
         }
     }
@@ -396,7 +456,7 @@ impl<'a, 'b> BitXor<&'b BigInt> for &'a BigInt {
 
 impl<'b> BitXorAssign<&'b BigInt> for BigInt {
     fn bitxor_assign(&mut self, rhs: &'b BigInt) {
-        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { Pos }, { Neg }, { Neg }, { Pos });
+        self.bi_type = bi_pos_neg_mat_macro!(self, rhs, { BigIntType::Pos }, { BigIntType::Neg }, { BigIntType::Neg }, { BigIntType::Pos });
         *self.get_nat_mut() ^= rhs.get_nat();
     }
 }
@@ -406,8 +466,8 @@ impl Not for &BigInt {
     fn not(self) -> Self::Output {
         BigInt {
             bi_type: match self.bi_type {
-                Pos => Neg,
-                Neg => Pos,
+                BigIntType::Pos => BigIntType::Neg,
+                BigIntType::Neg => BigIntType::Pos,
             },
             nat: self.get_nat().not(),
         }
@@ -424,19 +484,19 @@ impl<'a, 'b> Add<&'b BigInt> for &'a BigInt {
             {
                 BigInt {
                     nat: self.get_nat() + rhs.get_nat(),
-                    bi_type: Pos,
+                    bi_type: BigIntType::Pos,
                 }
             },
             {
                 if is_great {
                     BigInt {
                         nat: self.get_nat() - rhs.get_nat(),
-                        bi_type: Pos,
+                        bi_type: BigIntType::Pos,
                     }
                 } else {
                     BigInt {
                         nat: rhs.get_nat() - self.get_nat(),
-                        bi_type: Neg,
+                        bi_type: BigIntType::Neg,
                     }
                 }
             },
@@ -444,19 +504,19 @@ impl<'a, 'b> Add<&'b BigInt> for &'a BigInt {
                 if is_great {
                     BigInt {
                         nat: self.get_nat() - rhs.get_nat(),
-                        bi_type: Neg,
+                        bi_type: BigIntType::Neg,
                     }
                 } else {
                     BigInt {
                         nat: rhs.get_nat() - self.get_nat(),
-                        bi_type: Pos,
+                        bi_type: BigIntType::Pos,
                     }
                 }
             },
             {
                 BigInt {
                     nat: self.get_nat() + rhs.get_nat(),
-                    bi_type: Neg,
+                    bi_type: BigIntType::Neg,
                 }
             }
         )
@@ -470,29 +530,29 @@ impl<'b> AddAssign<&'b BigInt> for BigInt {
             self,
             rhs,
             {
-                self.bi_type = Pos;
+                self.bi_type = BigIntType::Pos;
                 *self.get_nat_mut() += rhs.get_nat();
             },
             {
                 if is_great {
-                    self.bi_type = Pos;
+                    self.bi_type = BigIntType::Pos;
                     *self.get_nat_mut() -= rhs.get_nat();
                 } else {
-                    self.bi_type = Neg;
+                    self.bi_type = BigIntType::Neg;
                     *self.get_nat_mut() -= rhs.get_nat();
                 }
             },
             {
                 if is_great {
-                    self.bi_type = Neg;
+                    self.bi_type = BigIntType::Neg;
                     *self.get_nat_mut() -= rhs.get_nat();
                 } else {
-                    self.bi_type = Pos;
+                    self.bi_type = BigIntType::Pos;
                     *self.get_nat_mut() -= rhs.get_nat();
                 }
             },
             {
-                self.bi_type = Neg;
+                self.bi_type = BigIntType::Neg;
                 *self.get_nat_mut() += rhs.get_nat();
             }
         );
@@ -509,25 +569,25 @@ impl<'a, 'b> Sub<&'b BigInt> for &'a BigInt {
             {
                 BigInt {
                     nat: self.get_nat() - rhs.get_nat(),
-                    bi_type: if is_great { Pos } else { Neg },
+                    bi_type: if is_great { BigIntType::Pos } else { BigIntType::Neg },
                 }
             },
             {
                 BigInt {
                     nat: self.get_nat() + rhs.get_nat(),
-                    bi_type: Pos,
+                    bi_type: BigIntType::Pos,
                 }
             },
             {
                 BigInt {
                     nat: self.get_nat() + rhs.get_nat(),
-                    bi_type: Neg,
+                    bi_type: BigIntType::Neg,
                 }
             },
             {
                 BigInt {
                     nat: self.get_nat() - rhs.get_nat(),
-                    bi_type: if is_great { Neg } else { Pos },
+                    bi_type: if is_great { BigIntType::Neg } else { BigIntType::Pos },
                 }
             }
         )
@@ -541,38 +601,36 @@ impl<'b> SubAssign<&'b BigInt> for BigInt {
             self,
             rhs,
             {
-                self.bi_type = if is_great { Pos } else { Neg };
+                self.bi_type = if is_great { BigIntType::Pos } else { BigIntType::Neg };
                 *self.get_nat_mut() -= rhs.get_nat();
             },
             {
-                self.bi_type = Pos;
+                self.bi_type = BigIntType::Pos;
                 *self.get_nat_mut() += rhs.get_nat();
             },
             {
-                self.bi_type = Neg;
+                self.bi_type = BigIntType::Neg;
                 *self.get_nat_mut() += rhs.get_nat();
             },
             {
-                self.bi_type = if is_great { Neg } else { Pos };
+                self.bi_type = if is_great { BigIntType::Neg } else { BigIntType::Pos };
                 *self.get_nat_mut() -= rhs.get_nat();
             }
         );
     }
 }
 
-impl std::ops::Neg for &BigInt {
+impl Neg for &BigInt {
     type Output = BigInt;
+    
     fn neg(self) -> Self::Output {
-        BigInt {
-            nat: self.get_nat().clone(),
-            bi_type: if self.is_zero() {
-                Pos
-            } else {
-                match self.bi_type {
-                    Pos => Neg,
-                    Neg => Pos,
-                }
-            },
+        if self.is_nan() {
+            BigInt::nan()
+        } else {
+            BigInt {
+                nat: self.get_nat().clone(),
+                bi_type: if self.is_pos() {if self.is_zero() {BigIntType::Pos} else {BigIntType::Neg}} else {BigIntType::Pos}
+            }
         }
     }
 }
@@ -582,7 +640,7 @@ impl<'a, 'b> Mul<&'b BigInt> for &'a BigInt {
     fn mul(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() * rhs.get_nat(),
-            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg },
+            bi_type: if self.is_same_sign(rhs) { BigIntType::Pos } else { BigIntType::Neg },
         }
     }
 }
@@ -590,7 +648,7 @@ impl<'a, 'b> Mul<&'b BigInt> for &'a BigInt {
 impl<'b> MulAssign<&'b BigInt> for BigInt {
     fn mul_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() *= rhs.get_nat();
-        self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg }
+        self.bi_type = if self.is_same_sign(rhs) { BigIntType::Pos } else { BigIntType::Neg }
     }
 }
 
@@ -599,7 +657,7 @@ impl<'a, 'b> Div<&'b BigInt> for &'a BigInt {
     fn div(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() / rhs.get_nat(),
-            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg },
+            bi_type: if self.is_same_sign(rhs) { BigIntType::Pos } else { BigIntType::Neg },
         }
     }
 }
@@ -607,7 +665,7 @@ impl<'a, 'b> Div<&'b BigInt> for &'a BigInt {
 impl<'b> DivAssign<&'b BigInt> for BigInt {
     fn div_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() /= rhs.get_nat();
-        self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg };
+        self.bi_type = if self.is_same_sign(rhs) { BigIntType::Pos } else { BigIntType::Neg };
     }
 }
 
@@ -616,7 +674,7 @@ impl<'a, 'b> Rem<&'b BigInt> for &'a BigInt {
     fn rem(self, rhs: &'b BigInt) -> Self::Output {
         BigInt {
             nat: self.get_nat() % rhs.get_nat(),
-            bi_type: if self.is_same_sign(rhs) { Pos } else { Neg },
+            bi_type: if self.is_pos() {BigIntType::Pos} else {BigIntType::Neg},
         }
     }
 }
@@ -624,7 +682,7 @@ impl<'a, 'b> Rem<&'b BigInt> for &'a BigInt {
 impl<'b> RemAssign<&'b BigInt> for BigInt {
     fn rem_assign(&mut self, rhs: &'b BigInt) {
         *self.get_nat_mut() %= rhs.get_nat();
-        self.bi_type = if self.is_same_sign(rhs) { Pos } else { Neg };
+        self.bi_type = if self.is_pos() {BigIntType::Pos} else {BigIntType::Neg};
     }
 }
 
@@ -650,7 +708,7 @@ impl Shr<usize> for &BigInt {
         let nat = self.get_nat() >> rhs;
         BigInt {
             bi_type: if &nat == &Nat::from_u8(0) {
-                Pos
+                BigIntType::Pos
             } else {
                 self.bi_type
             },
@@ -663,7 +721,7 @@ impl ShrAssign<usize> for BigInt {
     fn shr_assign(&mut self, rhs: usize) {
         *self.get_nat_mut() >>= rhs;
         if self.get_nat() == &Nat::from_u8(0) {
-            self.bi_type = Pos;
+            self.bi_type = BigIntType::Pos;
         }
     }
 }
@@ -674,8 +732,11 @@ macro_rules! bi_impl_fmt_macro {
             fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
                 let nat = format!($Fmt, self.get_nat());
                 if !self.is_nan() {
-                    let si = if self.bi_type == Pos { '+' } else { '-' };
-                    write!(f, "{}{}", si, nat)
+                    if self.is_pos() {
+                        write!(f, "{}", nat)
+                    } else {
+                        write!(f, "-{}", nat)
+                    }
                 } else {
                     write!(f, "{}", nat)
                 }
@@ -701,15 +762,17 @@ mod tests {
             let max_str = format!($Fmt1, '+', $Max);
             let bi_max = BigInt::from(<$Type>::max_value());
             let bi_min = BigInt::from(<$Type>::min_value());
+            let zero = BigInt::from(0u8);
+            
             assert_eq!(
-                format!($Fmt2, bi_max),
+                format!("+{}", format!($Fmt2, bi_max)),
                 max_str,
                 "{}->{}",
                 stringify!($Type),
                 $Fmt2
             );
             assert_eq!(
-                format!($Fmt2, bi_min),
+                if bi_min < zero {format!($Fmt2, bi_min)} else {format!("+{}", format!($Fmt2, bi_min))},
                 min_str,
                 "{}->{}",
                 stringify!($Type),
@@ -890,5 +953,61 @@ mod tests {
         let l2 = BigInt::from("0xff");
         let quo = BigInt::from("0xd8");
         assert_eq!(&l1 % &l2, quo);
+    }
+    
+    #[test]
+    fn gcd() {
+        // the test cases come from the int_test.go in the golang source code
+        // 0  1  2  3  4
+        // d, x, y, a, b
+        let cases = [
+            ("0", "0", "0", "0", "0"),
+            ("7", "0", "1", "0", "7"),
+            ("7", "0", "-1", "0", "-7"),
+            ("11", "1", "0", "11", "0"),
+            ("7", "-1", "-2", "-77", "35"),
+            ("935", "-3", "8", "64515", "24310"),
+            ("935", "-3", "-8", "64515", "-24310"),
+            ("935", "3", "-8", "-64515", "-24310"),
+
+            ("1", "-9", "47", "120", "23"),
+            ("7", "1", "-2", "77", "35"),
+            ("935", "-3", "8", "64515", "24310"),
+            ("935000000000000000", "-3", "8", "64515000000000000000", "24310000000000000000"),
+            ("1", "-221", "22059940471369027483332068679400581064239780177629666810348940098015901108344", "98920366548084643601728869055592650835572950932266967461790948584315647051443", "991"),
+        ];
+        
+        for ele in cases.iter() {
+            let a = BigInt::from(ele.3);
+            let b = BigInt::from(ele.4);
+            let (d, x, y) = a.gcd(&b).unwrap();
+            
+            assert_eq!(d, BigInt::from(ele.0));
+            assert_eq!(x, BigInt::from(ele.1));
+            assert_eq!(y, BigInt::from(ele.2));
+            
+            // println!("d={}, x={}, y={}, a={}, b={}", d, x, y, a, b);
+        }
+    }
+    
+    #[test]
+    fn mod_inverse() {
+        // the test cases come from the int_test.go in the golang source code
+        let cases = [
+            ("1234567", "458948883992"),
+            ("239487239847", "2410312426921032588552076022197566074856950548502459942654116941958108831682612228890093858261341614673227141477904012196503648957050582631942730706805009223062734745341073406696246014589361659774041027169249453200378729434170325843778659198143763193776859869524088940195577346119843545301547043747207749969763750084308926339295559968882457872412993810129130294592999947926365264059284647209730384947211681434464714438488520940127459844288859336526896320919633919"),
+            ("-10", "13"), // issue #16984
+            ("10", "-13"),
+            ("-17", "-13"),
+        ];
+        
+        for ele in cases.iter() {
+            let g = BigInt::from(ele.0);
+            let n = BigInt::from(ele.1);
+            let inv = (&g).mod_inverse(&n).unwrap();
+            let inv_g = &g * &inv;
+            let inv = (&inv_g).mod_inverse(&n).unwrap();
+            assert_eq!(inv, BigInt::from(1));
+        }
     }
 }
