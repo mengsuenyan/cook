@@ -44,3 +44,5 @@ pub use bytes::Bytes;
 pub use cvt::Cvt;
 
 pub mod base_enc;
+
+pub mod json;
