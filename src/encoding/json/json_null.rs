@@ -1,10 +1,11 @@
 use std::fmt::{Debug, Formatter, Display};
 use std::str::FromStr;
-use crate::encoding::json::{JsonError, JsonErrorKind};
+use crate::encoding::json::{JsonError, JsonErrorKind, Json};
+use std::convert::TryFrom;
 
 const JSONNULL_STR: &str = "null";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct JsonNull;
 
 impl JsonNull {
@@ -43,6 +44,34 @@ impl FromStr for JsonNull {
                     des: format!("cannot transform '{}' to JsonNull", s),
                 }
             })
+        }
+    }
+}
+
+impl TryFrom<Json> for JsonNull {
+    type Error = JsonError;
+
+    fn try_from(value: Json) -> Result<Self, Self::Error> {
+        value.to_json_null()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::json::JsonNull;
+
+    #[test]
+    fn json_null() {
+        let cases = [
+            ("null", true),
+        ];
+        for ele in cases.iter() {
+            let json = ele.0.parse::<JsonNull>();
+            if ele.1 {
+                assert_eq!(json.unwrap(), JsonNull::new());
+            } else {
+                assert!(json.is_err());
+            }
         }
     }
 }

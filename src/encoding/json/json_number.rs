@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter, Debug};
 use std::str::FromStr;
-use crate::encoding::json::{JsonError, JsonErrorKind};
+use crate::encoding::json::{JsonError, JsonErrorKind, Json};
+use std::convert::TryFrom;
 
 // todo: 扩展到任意长度的整数/任意精度的浮点数
 #[derive(Clone)]
@@ -26,23 +27,13 @@ impl JsonNumber {
     }
 }
 
-macro_rules! impl_jsonnumber_from {
-    ($Type: ty) => {
-        impl From<$Type> for JsonNumber {
-            fn from(num: $Type) -> Self {
-                JsonNumber {
-                    num: JsonSubNum::from(num)
-                }
-            }
-        }
-    };
-    ($Type1: ty, $($Type2: ty), *) => {
-        impl_jsonnumber_from!($Type1);
-        impl_jsonnumber_from!($($Type2), *);
-    };
+impl PartialEq for JsonNumber {
+    fn eq(&self, other: &Self) -> bool {
+        let x = format!("{}", self);
+        let y = format!("{}", other);
+        x == y
+    }
 }
-
-impl_jsonnumber_from!(f32, f64, isize, usize, u128, i128, i8, u8, i16, u16, i32, u32, i64, u64);
 
 impl Display for JsonNumber {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -94,6 +85,7 @@ impl FromStr for JsonNumber {
     type Err = JsonError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
         if s.find('.').is_some() {
             impl_fromstr_block!(f64, s)
         } else {
@@ -106,98 +98,157 @@ impl FromStr for JsonNumber {
     }
 }
 
-impl From<i8> for JsonSubNum {
+impl From<i8> for JsonNumber {
     fn from(num: i8) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<u8> for JsonSubNum {
+impl From<u8> for JsonNumber {
     fn from(num: u8) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<i16> for JsonSubNum {
+impl From<i16> for JsonNumber {
     fn from(num: i16) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<u16> for JsonSubNum {
+impl From<u16> for JsonNumber {
     fn from(num: u16) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<i32> for JsonSubNum {
+impl From<i32> for JsonNumber {
     fn from(num: i32) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<u32> for JsonSubNum {
+impl From<u32> for JsonNumber {
     #[cfg(target_pointer_width = "32")]
     fn from(num: u32) -> Self {
-        JsonSubNum::JsonNumI128(num as i128)
+        JsonNumber {
+            num: JsonSubNum::JsonNumI128(num as i128)
+        }
     }
 
     #[cfg(target_pointer_width = "64")]
-    fn from(num: u32) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+    fn from(num: u32) -> Self { 
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
 }
 
-impl From<i64> for JsonSubNum {
+impl From<i64> for JsonNumber {
     #[cfg(target_pointer_width = "64")]
     fn from(num: i64) -> Self {
-        JsonSubNum::JsonNumISize(num as isize)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num as isize)
+        }
     }
     
     #[cfg(target_pointer_width = "32")]
     fn from(num: i64) -> Self {
-        JsonSubNum::JsonNumI128(num as i128)
+        JsonNumber {
+            num: JsonSubNum::JsonNumI128(num as i128)
+        }
     }
 }
 
-impl From<u64> for JsonSubNum {
+impl From<u64> for JsonNumber {
     fn from(num: u64) -> Self {
-        JsonSubNum::JsonNumI128(num as i128)
+        JsonNumber {
+            num: JsonSubNum::JsonNumI128(num as i128)
+        }
     }
 }
 
-impl From<isize> for JsonSubNum {
+impl From<isize> for JsonNumber {
     fn from(num: isize) -> Self {
-        JsonSubNum::JsonNumISize(num)
+        JsonNumber {
+            num: JsonSubNum::JsonNumISize(num)
+        }
     }
 }
 
-impl From<usize> for JsonSubNum {
+impl From<usize> for JsonNumber {
     fn from(num: usize) -> Self {
-        JsonSubNum::JSonNumUSize(num)
+        JsonNumber {
+            num: JsonSubNum::JSonNumUSize(num)
+        }
     }
 }
 
-impl From<u128> for JsonSubNum {
+impl From<u128> for JsonNumber {
     fn from(num: u128) -> Self {
-        JsonSubNum::JsonNumU128(num)
+        JsonNumber {
+            num: JsonSubNum::JsonNumU128(num)
+        }
     }
 }
 
-impl From<i128> for JsonSubNum {
+impl From<i128> for JsonNumber {
     fn from(num: i128) -> Self {
-        JsonSubNum::JsonNumI128(num)
+        JsonNumber {
+            num: JsonSubNum::JsonNumI128(num)
+        }
     }
 }
 
-impl From<f32> for JsonSubNum {
+impl From<f32> for JsonNumber {
     fn from(num: f32) -> Self {
-        JsonSubNum::JsonNumF32(num)
+        JsonNumber {
+            num: JsonSubNum::JsonNumF32(num)
+        }
     }
 }
 
-impl From<f64> for JsonSubNum {
+impl From<f64> for JsonNumber {
     fn from(num: f64) -> Self {
-        JsonSubNum::JsonNumF64(num)
+        JsonNumber {
+            num: JsonSubNum::JsonNumF64(num)
+        }
+    }
+}
+
+impl TryFrom<Json> for JsonNumber {
+    type Error = JsonError;
+
+    fn try_from(value: Json) -> Result<Self, Self::Error> {
+        value.to_json_number()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::json::JsonNumber;
+
+    #[test]
+    fn json_number() {
+        let cases = [
+            ("1.234568", JsonNumber::from(1.234568)),
+            ("80258750757", JsonNumber::from(80258750757u64)),
+            ("-80258750757", JsonNumber::from(-80258750757i64)),
+        ];
+
+        for ele in cases.iter() {
+            let json = ele.0.parse::<JsonNumber>();
+            assert_eq!(json.unwrap(), ele.1);
+        }
     }
 }

@@ -1,14 +1,10 @@
 use std::fmt::{Display, Formatter, Debug};
-use crate::encoding::json::{Json, JsonError, JsonErrorKind, JsonNull, JsonBool, JsonString, JsonObject};
+use crate::encoding::json::{Json, JsonError, JsonErrorKind, JsonNull, JsonBool, JsonString, JsonObject, JsonNumber};
 use std::str::{FromStr, Chars};
-
-const LINE_FEED_LEN: usize = 80;
 
 #[derive(Clone)]
 pub struct  JsonArray {
     arr: Vec<Json>,
-    is_space: bool,
-    line_feed_len: usize,
 }
 
 #[derive(Clone)]
@@ -64,8 +60,6 @@ impl JsonArray {
     pub fn new() -> JsonArray {
         JsonArray {
             arr: Vec::new(),
-            is_space: false,
-            line_feed_len: LINE_FEED_LEN,
         }
     }
     
@@ -89,8 +83,6 @@ impl JsonArray {
     pub fn with_capacity(capacity: usize) -> JsonArray {
         JsonArray {
             arr: Vec::with_capacity(capacity),
-            is_space: false,
-            line_feed_len: LINE_FEED_LEN,
         }
     }
     
@@ -118,42 +110,15 @@ impl JsonArray {
         self.arr.len()
     }
     
-    pub fn set_is_space(&mut self, is_space: bool) -> &Self {
-        self.is_space = is_space;
-        &*self
-    }
-    
-    pub fn set_line_feed_len(&mut self, line_feed_len: usize) -> &Self {
-        self.line_feed_len = if line_feed_len < LINE_FEED_LEN { LINE_FEED_LEN } else { line_feed_len };
-        &*self
-    }
-    
-    pub fn is_space(&self) -> bool {
-        self.is_space
-    }
-    
-    pub fn line_feed_len(&self) -> usize {
-        self.line_feed_len
-    }
-    
     fn cvt_to_string(&self, buf: &mut String) {
         buf.push('[');
         
         for ele in self.iter() {
             buf.push_str(ele.to_string().as_str());
             buf.push(',');
-            if self.is_space() {
-                buf.push(' ');
-            }
-            if buf.len() > self.line_feed_len() {
-                #[cfg(target_os = "windows")]
-                buf.push('\r');
-                
-                buf.push('\n');
-            }
         }
         
-        if !buf.is_empty() {
+        if buf.len() > 1 {
             buf.pop();
         }
         buf.push(']');
@@ -201,6 +166,44 @@ impl Debug for JsonArray {
     }
 }
 
+impl From<Json> for JsonArray {
+    fn from(val: Json) -> Self {
+        JsonArray {
+            arr: vec![val],
+        }
+    }
+}
+
+impl From<JsonNull> for JsonArray {
+    fn from(val: JsonNull) -> Self {
+        JsonArray::from(Json::from(val))
+    }
+}
+
+impl From<JsonBool> for JsonArray {
+    fn from(val: JsonBool) -> Self {
+        JsonArray::from(Json::from(val))
+    }
+}
+
+impl From<JsonNumber> for JsonArray {
+    fn from(val: JsonNumber) -> Self {
+        JsonArray::from(Json::from(val))
+    }
+}
+
+impl From<JsonString> for JsonArray {
+    fn from(val: JsonString) -> Self {
+        JsonArray::from(Json::from(val))
+    }
+}
+
+impl From<JsonObject> for JsonArray {
+    fn from(val: JsonObject) -> Self {
+        JsonArray::from(Json::from(val))
+    }
+}
+
 impl FromStr for JsonArray {
     type Err = JsonError;
 
@@ -220,27 +223,31 @@ impl FromStr for JsonArray {
 
         let s = &s[1..(s.len()-1)];
         let s = s.trim();
+        
         // 下一个要迭代字符的索引
         let mut idx = 0usize;
-        
         let mut arr = JsonArray::new();
+        
+        if s.is_empty() {
+            return Ok(arr);
+        }
 
         let mut itr = s.chars();
         let mut is_need_comma = false;
         loop {
-            idx += 1;
             match itr.next() {
                 Some(x) => {
+                    idx += x.len_utf8();
+                    
                     if x.is_whitespace() {
-                        idx += 1;
+                        continue;
                     } else if x == ',' {
                         if is_need_comma {
                             is_need_comma = false;
-                            idx += 1;
                         } else {
                             return Err(JsonError {
                                 kind: JsonErrorKind::ParseJsonArrayError {
-                                    des: String::from("doesn't matched comma"),
+                                    des: String::from("doesn't match comma"),
                                 }
                             });
                         }
@@ -292,7 +299,7 @@ pub fn find_quote_auxiliary(itr: &mut Chars) -> Option<usize> {
         } else {
             backslach_cnt = 0;
         }
-        len += 1;
+        len += x.len_utf8();
     }
     
     if is_quote {
@@ -303,11 +310,12 @@ pub fn find_quote_auxiliary(itr: &mut Chars) -> Option<usize> {
 }
 
 // 在itr中寻找`]`or`}`, 找到返回经过的字符个数, 否则返回Err  
-pub fn find_bracket_auxiliary(itr: &mut Chars, bracket: char, idx: usize) -> Result<usize, JsonError> {
+pub fn find_bracket_auxiliary(itr: &mut Chars, tgt: char, bracket: char, idx: usize) -> Result<usize, JsonError> {
     let mut len = 0;
     let mut is_bracket = false;
+    
+    let mut tgt_cnt = 0;
     while let Some(x) = itr.next() {
-        len += 1;
         // 字符串中可能会出现'}', 跳过字符串
         if x == '"' {
             match find_quote_auxiliary(itr) {
@@ -315,19 +323,26 @@ pub fn find_bracket_auxiliary(itr: &mut Chars, bracket: char, idx: usize) -> Res
                     len += x_len + 1;
                 },
                 None => {
-                    return Err(JsonArray::err(idx+len, "object(doesn't matched '\"')"));
+                    return Err(JsonArray::err(idx+len, "object(doesn't match '\"')"));
                 }
             }
+        } else if x == tgt {
+            tgt_cnt += 1;
         } else if x == bracket {
-            is_bracket = true;
-            break;
+            if tgt_cnt > 0 {
+                tgt_cnt -= 1;
+            } else {
+                is_bracket = true;
+                break;
+            }
         }
+        len += x.len_utf8();
     }
     
     if is_bracket {
         Ok(len)
     } else {
-        Err(JsonArray::err(idx, "object(doesn't matched '} or ]'"))
+        Err(JsonArray::err(idx, "object(doesn't match '} or ]'"))
     }
 }
 
@@ -378,7 +393,7 @@ pub fn find_value_auxiliary(cur_char: char, itr: &mut Chars, is_need_comma: bool
 
             match find_quote_auxiliary(itr) {
                 Some(len) => {
-                    let sub_str = &s[*idx..(*idx+len)];
+                    let sub_str = &s[(*idx)..(*idx+len)];
                     *idx += len + 1;
                     Ok(Json::from(JsonString::from(sub_str)))
                 },
@@ -392,12 +407,13 @@ pub fn find_value_auxiliary(cur_char: char, itr: &mut Chars, is_need_comma: bool
                 return Err(JsonArray::err(*idx, "array(need , before array)"));
             }
 
-            match find_bracket_auxiliary(itr, ']', *idx) {
+            match find_bracket_auxiliary(itr, '[', ']', *idx) {
                 Ok(len) => {
-                    let sub_s = &s[(*idx-1)..(*idx+len)];
+                    // [...]
+                    let sub_s = &s[(*idx-1)..(*idx+len+1)];
                     match sub_s.parse::<JsonArray>() {
                         Ok(x) => {
-                            *idx += len;
+                            *idx += len + 1;
                             Ok(Json::from(JsonArray::from(x)))
                         },
                         Err(e) => {
@@ -415,12 +431,13 @@ pub fn find_value_auxiliary(cur_char: char, itr: &mut Chars, is_need_comma: bool
                 return Err(JsonArray::err(*idx, "object(need , before object)"));
             }
 
-            match find_bracket_auxiliary(itr, '}', *idx) {
+            match find_bracket_auxiliary(itr, '{', '}', *idx) {
                 Ok(len) => {
-                    let sub_s = &s[(*idx-1)..(*idx+len)];
+                    // {...}
+                    let sub_s = &s[(*idx-1)..(*idx+len+1)];
                     match sub_s.parse::<JsonObject>() {
                         Ok(x) => {
-                            *idx += len;
+                            *idx += len + 1;
                             Ok(Json::from(JsonObject::from(x)))
                         },
                         Err(e) => {
@@ -433,12 +450,59 @@ pub fn find_value_auxiliary(cur_char: char, itr: &mut Chars, is_need_comma: bool
                 }
             }
         },
+        x if x == '-' || x.is_digit(10) => {
+            if is_need_comma {
+                return Err(JsonArray::err(*idx, "number(need , before number)"));
+            }
+            
+            let mut len = 0;
+            let mut itr_copy = itr.clone();
+            while let Some(x) = itr_copy.next() {
+                if x != '.' && !x.is_digit(10) {
+                    break;
+                } else {
+                    itr.next();
+                    len += x.len_utf8();
+                }
+            }
+
+            let sub_s = &s[(*idx-1)..(*idx + len)];
+            *idx += len;
+            match sub_s.parse::<JsonNumber>() {
+                Ok(json) => Ok(Json::from(json)),
+                Err(e) => Err(e),
+            }
+        },
         x => {
             Err(JsonError {
                 kind: JsonErrorKind::ParseJsonArrayError {
-                    des: format!("unknown character '{}'", x),
+                    des: format!("unknown character '{}' in the position {}", x, *idx),
                 }
             })
         },
     } // match
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::json::JsonArray;
+
+    #[test]
+    fn json_array() {
+        let cases = [
+            "[[0]]",
+            r#"["庄子", 3.1415926, null, true, false, ["<<逍遥游>>", "<<齐物论>>"]]"#,
+            r#"["庄子", 3.1415926, null, true, false]"#,
+            "[]",
+            r#"["庄子", 3.1415926, null, true, false, ["<<逍遥游>>", "<<齐物论>>"], 
+            {"逍遥游": "抟扶摇而上者九万里", "齐物论": "大智闲闲, 小智间间", "name": null, "is_exist": true, "year": 2020}]"#,
+        ];
+        
+        for &data in cases.iter() {
+            let json = data.parse::<JsonArray>();
+            assert!(json.is_ok());
+            json.unwrap();
+            // println!("{}", json);
+        }
+    }
 }

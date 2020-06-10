@@ -1,8 +1,9 @@
 use std::fmt::{Display, Debug, Formatter};
 use std::str::FromStr;
-use crate::encoding::json::{JsonError, JsonErrorKind};
+use crate::encoding::json::{JsonError, JsonErrorKind, Json};
+use std::convert::TryFrom;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct JsonString {
     string_: String
 }
@@ -76,6 +77,33 @@ impl FromStr for JsonString {
                     des: format!("{}", y)
                 }
             })
+        }
+    }
+}
+
+impl TryFrom<Json> for JsonString {
+    type Error = JsonError;
+
+    fn try_from(value: Json) -> Result<Self, Self::Error> {
+        value.to_json_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::json::{JsonString};
+
+    #[test]
+    fn json_string() {
+        let cases = [
+            ("庄子", JsonString::from("庄子"), "\"庄子\""),
+            ("北冥有鱼, 其名为鲲. 鲲之大, 不知其几千里也.", JsonString::from("北冥有鱼, 其名为鲲. 鲲之大, 不知其几千里也."), "\"北冥有鱼, 其名为鲲. 鲲之大, 不知其几千里也.\""),
+        ];
+        
+        for ele in cases.iter() {
+            let json = ele.0.parse::<JsonString>().unwrap();
+            assert_eq!(json, ele.1);
+            assert_eq!(format!("{}", json), ele.2);
         }
     }
 }

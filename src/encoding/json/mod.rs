@@ -27,6 +27,8 @@ enum JsonErrorKind {
     ParseJsonStringError{des: String},
     ParseJsonArrayError{des: String},
     ParseJsonObjectError{des: String},
+    TryFromErr(String),
+    Other(String),
 }
 
 #[derive(Clone)]
@@ -43,6 +45,8 @@ impl JsonError {
             JsonErrorKind::ParseJsonArrayError {des, ..} => des.as_str(),
             JsonErrorKind::ParseJsonObjectError {des, ..} => des.as_str(),
             JsonErrorKind::ParseJsonStringError {des, ..} => des.as_str(),
+            JsonErrorKind::TryFromErr(des) => des.as_str(),
+            JsonErrorKind::Other(des) => des.as_str(),
         }
     }
 }

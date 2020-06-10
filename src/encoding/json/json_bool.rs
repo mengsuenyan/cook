@@ -1,11 +1,12 @@
 use std::fmt::{Debug, Formatter, Display};
 use std::str::FromStr;
-use crate::encoding::json::{JsonError, JsonErrorKind};
+use crate::encoding::json::{JsonError, JsonErrorKind, Json};
+use std::convert::TryFrom;
 
 const JSONBOOL_TRUE_STR: &str = "true";
 const JSONBOOL_FALSE_STR: &str = "false";
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct JsonBool {
     boolean: bool,
 }
@@ -64,6 +65,32 @@ impl FromStr for JsonBool {
                     des: format!("cannot transform `{}` to JsonBool", s),
                 }
             })
+        }
+    }
+}
+
+impl TryFrom<Json> for JsonBool {
+    type Error = JsonError;
+
+    fn try_from(value: Json) -> Result<Self, Self::Error> {
+        value.to_json_bool()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::json::JsonBool;
+
+    #[test]
+    fn json_bool() {
+        let cases = [
+            ("true", JsonBool::new(true)),
+            ("false", JsonBool::from(false)),
+        ];
+        
+        for ele in cases.iter() {
+            let json = ele.0.parse::<JsonBool>();
+            assert_eq!(json.unwrap(), ele.1);
         }
     }
 }
