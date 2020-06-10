@@ -1,41 +1,20 @@
 //! 编码相关
 
-pub trait Encoder {
-    type Item;
+pub trait Encoder<FromT, ToU> {
     type Output;
+    type Error: std::fmt::Debug + std::fmt::Display;
     
     /// 将数据编码为另一种形式存储在dst中, dst原来数据会清零;  
-    fn encode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>;
-
-    /// 将数据编码为另一种形式存储在dst中, 数据会附加到dst尾部;  
-    fn encode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
-        let mut buf = Vec::new();
-        
-        let r = self.encode(&mut buf, src);
-        
-        dst.append(&mut buf);
-        r
-    }
+    fn encode(&self, dst: ToU, src: FromT) -> Result<Self::Output, Self::Error>;
 }
 
-pub trait Decoder {
-    type Item;
+pub trait Decoder<FromT, ToU> {
     type Output;
+    type Error: std::fmt::Debug + std::fmt::Display;
     
     /// 将数据编码为另一种形式存储在dst中, dst原来数据会清零;  
-    fn decode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str>;
-
-    fn decode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
-        let mut buf = Vec::new();
-        
-        let r = self.decode(&mut buf, src);
-        
-        dst.append(&mut buf);
-        r
-    }
+    fn decode(&self, dst: ToU, src: FromT) -> Result<Self::Output, Self::Error>;
 }
-
-pub trait Transformer: Encoder + Decoder {}
 
 mod bytes;
 mod cvt;

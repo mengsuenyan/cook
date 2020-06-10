@@ -3,7 +3,7 @@
 //! https://www.cnblogs.com/mengsuenyan/p/12950518.html
 
 use BaseType::Base32;
-use crate::encoding::{Encoder, Decoder, Transformer};
+use crate::encoding::{Encoder, Decoder};
 use crate::encoding::base_enc::BaseType::{Base64, Base16};
 
 const BASE32_STD: [u8; 32] = [
@@ -348,11 +348,11 @@ impl Base {
     }
 }
 
-impl Encoder for Base {
-    type Item = u8;
+impl Encoder<&[u8], &mut Vec<u8>> for Base {
     type Output = ();
+    type Error = &'static str;
 
-    fn encode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
+    fn encode(&self, dst: &mut Vec<u8>, src: &[u8]) -> Result<Self::Output, Self::Error> {
         match self.base_type {
             Base32 {tbl,is_padding} => {
                 dst.clear();
@@ -368,27 +368,13 @@ impl Encoder for Base {
             }
         }
     }
-
-    fn encode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
-        match self.base_type {
-            Base32 {tbl,is_padding} => {
-                self.base32_encode(dst, src, tbl, is_padding)
-            }, 
-            Base64 {tbl, is_padding} => {
-                self.base64_encode(dst, src, tbl, is_padding)
-            },
-            Base16 {tbl} => {
-                self.base16_encode(dst, src, tbl)
-            }
-        }
-    }
 }
 
-impl Decoder for Base {
-    type Item = u8; 
+impl Decoder<&[u8], &mut Vec<u8>> for Base {
     type Output = ();
+    type Error = &'static str;
 
-    fn decode(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
+    fn decode(&self, dst: &mut Vec<u8>, src: &[u8]) -> Result<Self::Output, Self::Error> {
         match self.base_type {
             Base32 {..} => {
                 dst.clear();
@@ -400,27 +386,11 @@ impl Decoder for Base {
             },
             Base16 {..} => {
                 dst.clear();
-                self.base16_decode(dst, src, &self.d_map)
-            }
-        }
-    }
-
-    fn decode_append(&self, dst: &mut Vec<Self::Item>, src: &[Self::Item]) -> Result<Self::Output, &'static str> {
-        match self.base_type {
-            Base32 {..} => {
-                self.base32_decode(dst, src, &self.d_map)
-            },
-            Base64 {..} => {
-                self.base64_decode(dst, src, &self.d_map)
-            },
-            Base16 {..} => {
                 self.base16_decode(dst, src, &self.d_map)
             }
         }
     }
 }
-
-impl Transformer for Base {}
 
 #[cfg(test)]
 mod tests {
