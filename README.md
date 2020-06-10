@@ -73,5 +73,7 @@
 
 - Bytes: 字节序列相关辅助功能;
 - Cvt: 转换相关;
-- Encoder/Decoder/Transformer: 编码器/解码器trait;
+- Encoder/Decoder: 编码器/解码器trait;
 - Base: Base32/Base64/Base16编解码;
+- Json: Json/JsonArray/JsonObject/JsonString/JsonNumber/JsonBool/JsonNull;
+  - JsonArrayIter/JsonArrayIterMut/JsonArrayIntoIter/JsonObjectIter/JsonObjectIterMut/JsonObjectIntoIter;

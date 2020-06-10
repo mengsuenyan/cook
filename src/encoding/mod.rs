@@ -2,7 +2,7 @@
 
 pub trait Encoder<FromT, ToU> {
     type Output;
-    type Error: std::fmt::Debug + std::fmt::Display;
+    type Error: std::fmt::Debug;
     
     /// 将数据编码为另一种形式存储在dst中, dst原来数据会清零;  
     fn encode(&self, dst: ToU, src: FromT) -> Result<Self::Output, Self::Error>;
@@ -10,7 +10,7 @@ pub trait Encoder<FromT, ToU> {
 
 pub trait Decoder<FromT, ToU> {
     type Output;
-    type Error: std::fmt::Debug + std::fmt::Display;
+    type Error: std::fmt::Debug;
     
     /// 将数据编码为另一种形式存储在dst中, dst原来数据会清零;  
     fn decode(&self, dst: ToU, src: FromT) -> Result<Self::Output, Self::Error>;

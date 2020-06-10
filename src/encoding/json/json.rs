@@ -19,7 +19,7 @@ enum JsonEntity {
 use JsonEntity::{JsonEntityNull, JsonEntityBool, JsonEntityString, JsonEntityNumber, JsonEntityArray, JsonEntityObject, JsonEntityNone};
 use std::fmt::{Debug, Formatter, Display};
 use crate::encoding::json::{JsonError, JsonErrorKind};
-use crate::encoding::Encoder;
+use crate::encoding::{Encoder, Decoder};
 
 #[derive(Clone)]
 pub struct Json {
@@ -317,6 +317,7 @@ impl Encoder<&str, &mut Vec<u8>> for Json {
     type Error = JsonError;
 
     fn encode(&self, dst: &mut Vec<u8>, src: &str) -> Result<Self::Output, Self::Error> {
+        dst.clear();
         match self.encode((), src) {
             Ok(json) => {
                 use std::io::Write;
@@ -336,12 +337,39 @@ impl Encoder<&str, &mut Vec<u8>> for Json {
     }
 }
 
+impl Decoder<&Json, &mut String> for Json {
+    type Output = ();
+    type Error = std::fmt::Error;
+
+    fn decode(&self, dst: &mut String, src: &Json) -> Result<Self::Output, Self::Error> {
+        use std::fmt::Write;
+        dst.clear();
+        match write!(dst, "{}", src) {
+            Ok(..) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Decoder<&Json, &mut Vec<u8>> for Json {
+    type Output = ();
+    type Error = std::io::Error;
+
+    fn decode(&self, dst: &mut Vec<u8>, src: &Json) -> Result<Self::Output, Self::Error> {
+        use std::io::Write;
+        dst.clear();
+        match write!(dst, "{}", src) {
+            Ok(..) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use std::io::{Read};
     use crate::encoding::json::{Json};
-    use crate::encoding::Encoder;
+    use crate::encoding::{Encoder, Decoder};
 
     #[test]
     fn json() {
@@ -353,6 +381,9 @@ mod tests {
         // let mut file = std::fs::File::create("./src/encoding/json/testdata/code_by_json.json").unwrap();
         let json_str = format!("{}", json);
         // file.write_all(json_str.as_bytes()).unwrap();
+        assert_eq!(data, json_str);
+        let mut json_str = String::with_capacity(2048);
+        json.decode(&mut json_str, &json).unwrap();
         assert_eq!(data, json_str);
     }
 }
