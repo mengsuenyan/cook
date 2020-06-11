@@ -16,7 +16,6 @@ use std::arch::x86_64 as march;
 
 #[cfg(all(support_avx2, target_arch = "x86"))]
 use std::arch::x86 as march;
-use crate::encoding::Cvt;
 
 const HEX_BASIC_LEN: usize = 8;
 const DEC_BASIC_LEN: usize = 10;
@@ -254,67 +253,63 @@ impl Nat {
     #[cfg(support_avx2)]
     #[target_feature(enable = "avx2")]
     unsafe fn mul_by_avx2(min: &[u32], max: &[u32]) -> Nat {
-        let num = if (max.len() & 0x3) > 0 {
-            (max.len() >> 2) + 1
-        } else {
-            max.len() >> 2
-        };
-        
-        let mut right = Vec::new();
-        right.resize(num << 2, 0u32);
-        let right = right.as_mut_slice();
-        let tmp = &mut right[0..max.len()];
-        tmp.copy_from_slice(max);
-
-        let mut itr = right.iter();
-        let mut rpackage = Vec::with_capacity(num);
-        for _ in 0..num {
-            let m1 = [*itr.next().unwrap(), *itr.next().unwrap(), *itr.next().unwrap(), *itr.next().unwrap()];
-            let m: &[i32; 4] = Cvt::reinterpret_cast(&m1);
-            let m2 = march::_mm256_setr_epi32(m[0], 0, m[1], 0, m[2], 0, m[3], 0);
-            rpackage.push(m2);
-        }
-        
         let mut lpackage = Vec::with_capacity(min.len());
         for &ele in min.iter() {
-            let tmp: i32 = std::mem::transmute(ele);
-            let n = march::_mm256_set1_epi32(tmp);
-            lpackage.push(n);
+            lpackage.push(march::_mm256_set1_epi32(std::mem::transmute(ele)));
+        }
+
+        let mut rpackage = Vec::with_capacity((max.len() + 3) >> 2);
+        let mut itr = max.iter();
+        while let Some(&x0) = itr.next() {
+            let x0 = std::mem::transmute(x0);
+            let x1 = match itr.next() {Some(&x)=>std::mem::transmute(x), None=>0};
+            let x2 = match itr.next() {Some(&x)=>std::mem::transmute(x), None=>0};
+            let x3 = match itr.next() {Some(&x)=>std::mem::transmute(x), None=>0};
+            rpackage.push(march::_mm256_setr_epi32(x0, 0, x1, 0, x2, 0, x3, 0));
         }
         
-        let mut r = Vec::with_capacity(lpackage.len());
         let mask = march::_mm256_set1_epi32(-1);
-        for &l in lpackage.iter() {
-            let mut tmp0 = Vec::with_capacity(rpackage.len());
+        let mut r = Vec::with_capacity(lpackage.len());
+        let v_len = min.len() + (((max.len() + 3) >> 2) << 2) - 1;
+        for (i, &l) in lpackage.iter().enumerate() {
+            // let mut tmp0 = Vec::with_capacity(rpackage.len());
+            // tmp0.resize(i, 0);
+            let mut tmp0 = Vec::with_capacity(v_len);
+            tmp0.resize(v_len, 0);
+            let mut tmp0_ptr = std::mem::transmute::<*mut u64, *mut i64>(tmp0.as_mut_ptr());
+            tmp0_ptr = tmp0_ptr.add(i);
             for &r in rpackage.iter() {
                 let tmp1 = march::_mm256_mul_epu32(l, r);
-                let mut tmp2 = [0u64; 4];
-                march::_mm256_maskstore_epi64(std::mem::transmute::<*mut u64, *mut i64>(tmp2.as_mut_ptr()), mask, tmp1);
-                tmp0.extend_from_slice(tmp2.as_ref());
+                // let mut tmp2 = [0u64; 4];
+                // march::_mm256_maskstore_epi64(std::mem::transmute::<*mut u64, *mut i64>(tmp2.as_mut_ptr()), mask, tmp1);
+                // tmp0.extend_from_slice(tmp2.as_ref());
+                march::_mm256_maskstore_epi64(tmp0_ptr, mask, tmp1);
+                tmp0_ptr = tmp0_ptr.add(4);
             }
+            // tmp0.resize(v_len, 0);
             r.push(tmp0)
         }
-        
-        let mut nat = Nat::from(0u8);
-        for (i, v) in r.iter().enumerate() {
-            let mut n = Vec::with_capacity(v.len() + i);
-            n.resize(i, 0);
-            let mut c = 0u64;
-            for &ele in v.iter() {
-                let tmp = ele + c;
-                n.push((tmp & 0xffffffff) as u32);
-                c = tmp >> 32;
+
+        let mut nat = Vec::with_capacity(v_len);
+        let mut pre = 0;
+        const MASK: u64 = 0xffffffff;
+        for i in 0..v_len {
+            let mut c = 0;
+            let mut out = pre;
+            for ele in r.iter() {
+                c += march::_addcarry_u64(0, out, ele[i], &mut out) as u64;
             }
-            if c > 0 {
-                n.push(c as u32);
-            }
-            let natx = Nat {nat: n};
-            nat += &natx;
+            nat.push((out & MASK) as u32);
+            pre = (out >> 32) | (c << 32);
         }
-        
-        Nat::trim_last_zeros(nat.as_vec_mut(), 0);
-        
-        nat
+
+        if pre > 0 {
+            nat.push((pre & MASK) as u32);
+        }
+
+        Nat::trim_last_zeros(&mut nat, 0);
+
+        Nat {nat}
     }
     
     #[cfg(support_avx2)]
@@ -606,7 +601,6 @@ impl Nat {
             let xi = unsafe {
                     &xi_m1.pow2() % n
                 };
-            
             #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
             let xi = &(&xi_m1 * &xi_m1) % n;
 
@@ -625,48 +619,35 @@ impl Nat {
         if limit.is_nan() || limit == &0u32 {
             return Nat::nan()
         }
-
         let bits_len = limit.bits_len();
-        // let (num, rem) = ((bits_len + 31) / 32, (bits_len % 32) as u32);
         let (num, rem) = ((bits_len + 31) >> 5, (bits_len & 0x1f) as u32);
-        let mut nat = Nat::from(0u8);
-        nat.as_vec_mut().resize(num, 0u32);
         let mask = if rem != 0 {
             (1u32 << rem) - 1
         } else {
             u32::max_value()
         };
-        
-        // let mut cnt = 0;
+
+        let nat = Vec::with_capacity(num);
+        let mut nat = Nat{nat};
         loop {
-        // while cnt < 10 {
-            let mut itr = nat.as_vec_mut().iter_mut();
-            while let Some(x) = itr.next() {
+            while nat.num() < num {
                 let r: u64 = rand.rng();
-                let (low, high) = ((r & (u32::max_value() as u64)) as u32, (r >> 32) as u32);
-                *x = low;
-                match itr.next() {
-                    Some(y) => *y = high,
-                    _ => {},
-                };
+                let (low, high) = ((r & (0xffffffff)) as u32, (r >> 32) as u32);
+                nat.as_vec_mut().push(low);
+                nat.as_vec_mut().push(high);
+            }
+            
+            if nat.num() > num {
+                nat.as_vec_mut().pop();
             }
             
             *nat.as_vec_mut().last_mut().unwrap() &= mask;
             if &nat < limit {
-                break;
+                return nat;
+            } else {
+                nat.as_vec_mut().clear();
             }
-            // cnt += 1;
         }
-        
-        // if cnt == 10 {
-        //     *nat.as_vec_mut().last_mut().unwrap() &= mask >> 1;
-        // }
-        
-        while nat.as_vec().len() > 1 && *nat.as_vec().last().unwrap() == 0 {
-            nat.as_vec_mut().pop();
-        }
-        
-        nat
     }
     
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -737,6 +718,7 @@ impl Nat {
         } else {
             // 反复平方法 
             let mut d = Nat::from_u8(1);
+            let sm = self % n;
             for i in 0..bits_len {
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
@@ -749,7 +731,8 @@ impl Nat {
                 }
                 
                 if b.check_bit_is_one(bits_len - i - 1, bits_len) {
-                    d = &(&d * self) % n;
+                    // d = &(&d * self) % n;
+                    d = &(&d * &sm) % n;
                 }
             }
             
@@ -1941,6 +1924,7 @@ mod tests {
 
     #[test]
     fn test_nat_rem() {
+        let his = Instant::now();
         let l1 = Nat::from_str("ffffffffffffff000000000000", 16);
         let l2 = Nat::from_u8(255);
         assert_eq!(&l1 % &l2, Nat::from_u8(0));
@@ -1954,6 +1938,7 @@ mod tests {
         assert_eq!(&l1 % &l2, quo);
         assert_eq!(&l1 % 255u32, Some(0xd8u32));
         assert_eq!(&l1 % 255u64, Some(0xd8u64));
+        println!("total: {:?}", his.elapsed());
     }
     
     #[test]
@@ -1984,10 +1969,10 @@ fb1bd6bdc94b5a2d86f4ba46bfdec80a7614b6d1614ca2027b5cc5209837a8beb6a374def3\
             unsafe {
                 let h = Instant::now();
                 assert_eq!(nat.pow2(), Nat::from(case.1));
-                println!("{:?}, case=>{:x}", Instant::now().duration_since(h), nat);
+                println!("{:?}, case=>{:x}, len:{}", h.elapsed(), nat, nat.bits_len());
             }
         }
-        println!("total: {:?}", Instant::now().duration_since(h));
+        println!("total: {:?}", h.elapsed());
     }
 
     #[test]
@@ -2019,8 +2004,10 @@ fb1bd6bdc94b5a2d86f4ba46bfdec80a7614b6d1614ca2027b5cc5209837a8beb6a374def3\
         ];
         
         for ele in cases.iter() {
+            let his = Instant::now();
             let (a,b,n,res) = (Nat::from(ele.0), Nat::from(ele.1), Nat::from(ele.2), Nat::from(ele.3));
             assert_eq!(a.pow_mod(&b, &n), res, "cases=>{}", ele.0);
+            println!("time: {:?}, case=>{}, len:{}", his.elapsed(), ele.0, a.bits_len());
         }
     }
     
@@ -2126,7 +2113,7 @@ fb1bd6bdc94b5a2d86f4ba46bfdec80a7614b6d1614ca2027b5cc5209837a8beb6a374def3\
 
         ];
         
-        let s = 20usize;
+        let s = 1usize;
         
         let his0 = Instant::now();
         for &ele in cases.iter() {
@@ -2134,14 +2121,14 @@ fb1bd6bdc94b5a2d86f4ba46bfdec80a7614b6d1614ca2027b5cc5209837a8beb6a374def3\
             // println!("{}, {}", nat, nat.probably_prime(s));
             let his = Instant::now();
             assert!(nat.probably_prime(s), "case=>{}", ele);
-            println!("time: {:?}, case=>{}", Instant::now().duration_since(his), ele);
+            println!("time: {:?}, case=>{}, len:{}", his.elapsed(), ele, nat.bits_len());
         }
         
         for &ele in composites.iter() {
             let nat = Nat::from(ele);
             let his = Instant::now();
             assert!(!nat.probably_prime(s), "case=>{}", ele);
-            println!("time: {:?}, case=>{}", Instant::now().duration_since(his), ele);
+            println!("time: {:?}, case=>{}, len:{}", his.elapsed(), ele, nat.bits_len());
         }
         println!("total time: {:?}", Instant::now().duration_since(his0));
     }

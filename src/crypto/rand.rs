@@ -190,7 +190,7 @@ const SMALL_RIMES_PRODUCT: u64 = 16294579238595022365u64;
 /// 欧拉定理: 对于任意整数n>1, a^phi(n)=1(mod n)对所有a属于Z成立;  
 /// 费马定理: 如果p是质数, 则a^(p-1)=1(mod p)对于所有a属于Z成立;  
 #[cfg(prime_with_thread)]
-pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
+pub fn prime<'a, Rand>(bits: usize, test_nums: usize) -> Result<Nat, &'a str>
     where Rand: CryptoRng + Read + Default
 {
     if bits < 2 {
@@ -202,7 +202,7 @@ pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
     let cpu_nums = CpuInfo::cpu_logical_core_nums();
 
     if bits < 1024 || (cpu_nums >> 1) == 0 {
-        return match prime_exe::<Rand>(bits,exit_thread.clone(), None) {
+        return match prime_exe::<Rand>(bits,exit_thread.clone(), None, test_nums) {
             Some(x) => x,
             None => Err("Cannot get a prime number!"),
         };
@@ -214,7 +214,7 @@ pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
         let name = format!("prime thread {}", i);
         let is_exit = exit_thread.clone();
         let thread = std::thread::Builder::new().name(name).spawn(move || {
-            prime_exe::<Rand>(bits, is_exit, Some(tx_c));
+            prime_exe::<Rand>(bits, is_exit, Some(tx_c), test_nums);
         }).unwrap();
         handle.push(thread);
     }
@@ -241,7 +241,7 @@ pub fn prime<'a, Rand>(bits: usize) -> Result<Nat, &'a str>
 }
 
 #[cfg(prime_with_thread)]
-fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option<mpsc::Sender<Result<Nat, &str>>>) -> Option<Result<Nat, &str>>
+fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option<mpsc::Sender<Result<Nat, &str>>>, test_nums: usize) -> Option<Result<Nat, &str>>
     where Rand: CryptoRng + Read + Default
 {
     // let small_prime_product = Nat::from_u64(SMALL_RIMES_PRODUCT);
@@ -309,7 +309,7 @@ fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option
             break;
         }
 
-        if p.bits_len() == bits && p.probably_prime(20) {
+        if p.bits_len() == bits && p.probably_prime(test_nums) {
             match sender { 
                 Some(s) => {
                     s.send(Ok(p)).unwrap();
@@ -326,7 +326,7 @@ fn prime_exe<Rand>(bits: usize, is_exit: Arc<atomic::AtomicBool>, sender: Option
 }
 
 #[cfg(not(prime_with_thread))]
-pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str> 
+pub fn prime<Rand>(bits: usize, test_nums: usize) -> Result<Nat, &'static str> 
     where Rand: CryptoRng + Read + Default
 {
     if bits < 2 {
@@ -388,7 +388,7 @@ pub fn prime<Rand>(bits: usize) -> Result<Nat, &'static str>
             break;
         }
 
-        if p.bits_len() == bits && p.probably_prime(20) {
+        if p.bits_len() == bits && p.probably_prime(test_nums) {
              return Ok(p);
         }
     }
@@ -404,7 +404,7 @@ mod tests {
         let his0 = Instant::now();
         for i in 2..100 {
             let his = Instant::now();
-            let nat = super::prime::<CryptoRand>(i);
+            let nat = super::prime::<CryptoRand>(i, 1);
             assert!(nat.is_ok());
             let nat = nat.unwrap();
             println!("time: {:?}, case=>i{}->nat:{}:{}", Instant::now().duration_since(his), i, nat, nat.bits_len());
@@ -419,7 +419,7 @@ mod tests {
         let his0 = Instant::now();
         for &i in cases.iter() {
             let his = Instant::now();
-            let nat = super::prime::<CryptoRand>(i);
+            let nat = super::prime::<CryptoRand>(i, 1);
             assert!(nat.is_ok());
             let nat = nat.unwrap();
             println!("time: {:?}, case=>i{}->nat:{}:{}", Instant::now().duration_since(his), i, nat, nat.bits_len());
