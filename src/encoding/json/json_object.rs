@@ -413,13 +413,20 @@ impl TryFrom<Json> for JsonObject {
 
 #[cfg(test)]
 mod tests {
-    use crate::encoding::json::JsonObject;
+    use crate::encoding::json::{JsonObject, Json, JsonFormatter};
+    use crate::encoding::Decoder;
 
     #[test]
     fn json_object() {
         let cases = [
-            "{}",
-            r#"{"nu": {}}"#,
+            r#"
+{
+}"#,
+            r#"
+{
+  "nu": {
+  }
+}"#,
             r#"
 {
   "abi-blacklist": [
@@ -461,8 +468,13 @@ mod tests {
         for &ele in cases.iter() {
             let json = ele.parse::<JsonObject>();
             assert!(json.is_ok());
-            json.unwrap();
-            // println!("{}", json);
+            let json = Json::from(json.unwrap());
+            let mut jmatter = JsonFormatter::new();
+            jmatter.set_ind_char_num_all(2).set_arr_line_feed_all(true).set_ojb_line_feed_all(true).set_ind_char_all(' ');
+            let mut s = String::with_capacity(2048);
+            json.decode(&mut s, &jmatter).unwrap();
+            // println!("{}", s);
+            assert_eq!(ele.trim(), s.as_str());
         }
     }
 }

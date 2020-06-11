@@ -9,6 +9,7 @@ mod json_bool;
 mod json_null;
 mod json_string;
 mod json;
+mod json_formatter;
 
 pub use json_array::{JsonArray, JsonArrayIter, JsonArrayIterMut, JsonArrayIntoIter};
 pub use json_object::{JsonObject, JsonObjectIter, JsonObjectIterMut, JsonObjectIntoIter};
@@ -17,6 +18,7 @@ pub use json_bool::JsonBool;
 pub use json_null::JsonNull;
 pub use json_string::JsonString;
 pub use json::Json;
+pub use json_formatter::JsonFormatter;
 use std::fmt::{Debug, Formatter, Display};
 
 #[derive(Clone)]

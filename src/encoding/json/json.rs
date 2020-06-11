@@ -18,7 +18,7 @@ enum JsonEntity {
 
 use JsonEntity::{JsonEntityNull, JsonEntityBool, JsonEntityString, JsonEntityNumber, JsonEntityArray, JsonEntityObject, JsonEntityNone};
 use std::fmt::{Debug, Formatter, Display};
-use crate::encoding::json::{JsonError, JsonErrorKind};
+use crate::encoding::json::{JsonError, JsonErrorKind, JsonFormatter};
 use crate::encoding::{Encoder, Decoder};
 
 #[derive(Clone)]
@@ -143,7 +143,124 @@ impl Json {
             _ => false,
         }
     }
-    
+}
+
+macro_rules! impl_beauty_ind {
+    ($Dst:ident, $CurLvl: ident, $Jmatter: ident) => {
+        for lvl in 0..$CurLvl {
+            for _ in 0..$Jmatter.ind_char_num(lvl) {
+                $Dst.push($Jmatter.ind_char(lvl));
+            }
+        }
+    };
+}
+
+macro_rules! impl_beauty_line_feed {
+    ($Dst:ident, $IsParentObj:ident, $CurLvl:ident, $Jmatter:ident) => {
+        if $IsParentObj {
+            if $Jmatter.is_obj_line_feed($CurLvl) {
+                $Dst.push('\n');
+            }
+        } else {
+            if $Jmatter.is_arr_line_feed($CurLvl) {
+                $Dst.push('\n');
+            }
+        }
+    };
+    ($JsonObj:ident, $Dst:ident, $IsParentObj:ident, $CurLvl:ident, $Jmatter:ident) => {
+        if $JsonObj.len() > 0 {
+            if $IsParentObj {
+                if $Jmatter.is_obj_line_feed($CurLvl) {
+                    $Dst.pop();
+                }
+            } else {
+                if $Jmatter.is_arr_line_feed($CurLvl) {
+                    $Dst.pop();
+                }
+            }
+            $Dst.pop();
+            impl_beauty_line_feed!($Dst, $IsParentObj, $CurLvl, $Jmatter);
+        }
+    }
+}
+
+impl Json {
+    fn beauty(&self, dst: &mut String, is_parent_obj: bool, cur_lvl: usize, jmatter: &JsonFormatter) {
+        match &self.entity {
+            JsonEntityNone => {},
+            JsonEntityNull(json) => {
+                dst.push_str(format!("{}", json).as_str());
+                dst.push(',');
+            },
+            JsonEntityBool(json) => {
+                dst.push_str(format!("{}", json).as_str());
+                dst.push(',');
+            },
+            JsonEntityNumber(json) => {
+                dst.push_str(format!("{}", json).as_str());
+                dst.push(',');
+            },
+            JsonEntityString(json) => {
+                dst.push_str(format!("{}", json).as_str());
+                dst.push(',');
+            },
+            JsonEntityArray(json) => {
+                dst.push('[');
+                if jmatter.is_arr_line_feed(cur_lvl) {
+                    dst.push('\n');
+                }
+                let next_lvl = cur_lvl + 1;
+
+                for ele in json.iter() {
+                    impl_beauty_ind!(dst, next_lvl, jmatter);
+                    ele.beauty(dst,false,next_lvl, jmatter);
+                    impl_beauty_line_feed!(dst, is_parent_obj, next_lvl, jmatter);
+                }
+
+                impl_beauty_line_feed!(json, dst, is_parent_obj, next_lvl, jmatter);
+                impl_beauty_ind!(dst, cur_lvl, jmatter);
+                dst.push(']');
+                dst.push(',');
+
+                if jmatter.is_arr_line_feed(cur_lvl) {
+                    match dst.pop() {
+                        Some('\n') => dst.push('\n'),
+                        Some(x) => dst.push(x),
+                        None => {},
+                    }
+                }
+            },
+            JsonEntityObject(json) => {
+                dst.push('{');
+
+                if jmatter.is_obj_line_feed(cur_lvl) {
+                    dst.push('\n');
+                }
+                let next_lvl = cur_lvl+1;
+
+                for ele in json.iter() {
+                    impl_beauty_ind!(dst, next_lvl, jmatter);
+                    dst.push('"');
+                    dst.push_str(ele.0.as_str());
+                    dst.push_str(r#"": "#);
+                    ele.1.beauty(dst, true, next_lvl, jmatter);
+                    impl_beauty_line_feed!(dst, is_parent_obj, next_lvl, jmatter);
+                }
+
+                impl_beauty_line_feed!(json, dst, is_parent_obj, next_lvl, jmatter);
+                impl_beauty_ind!(dst, cur_lvl, jmatter);
+                dst.push('}');
+                dst.push(',');
+                if jmatter.is_obj_line_feed(cur_lvl) {
+                    match dst.pop() {
+                        Some('\n') => dst.push('\n'),
+                        Some(x) => dst.push(x),
+                        None => {},
+                    }
+                }
+            }
+        } // match
+    }
 }
 
 impl From<JsonNull> for Json {
@@ -362,6 +479,42 @@ impl Decoder<&Json, &mut Vec<u8>> for Json {
             Ok(..) => Ok(()),
             Err(e) => Err(e),
         }
+    }
+}
+
+impl Decoder<&JsonFormatter, &mut Vec<u8>> for Json {
+    type Output = ();
+    type Error = std::io::Error;
+
+    fn decode(&self, dst: &mut Vec<u8>, src: &JsonFormatter) -> Result<Self::Output, Self::Error> {
+        let mut s = String::with_capacity(2048);
+        match self.decode(&mut s, src) {
+            Ok(x) => {
+                dst.clear();
+                unsafe {
+                    dst.append(s.as_mut_vec());
+                }
+                Ok(x)
+            },
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Decoder<&JsonFormatter, &mut String> for Json {
+    type Output = ();
+    type Error = std::io::Error;
+
+    fn decode(&self, dst: &mut String, src: &JsonFormatter) -> Result<Self::Output, Self::Error> {
+        dst.clear();
+        self.beauty(dst, false, 0, src);
+        while let Some(x) = dst.pop() {
+            if x != '\n' && x != ',' {
+                dst.push(x);
+                break;
+            }
+        }
+        Ok(())
     }
 }
 

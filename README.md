@@ -75,5 +75,7 @@
 - Cvt: 转换相关;
 - Encoder/Decoder: 编码器/解码器trait;
 - Base: Base32/Base64/Base16编解码;
-- Json: Json/JsonArray/JsonObject/JsonString/JsonNumber/JsonBool/JsonNull;
+- Json:
+  - JsonArray/JsonObject/JsonString/JsonNumber/JsonBool/JsonNull;
   - JsonArrayIter/JsonArrayIterMut/JsonArrayIntoIter/JsonObjectIter/JsonObjectIterMut/JsonObjectIntoIter;
+  - Json/JsonFormatter;
