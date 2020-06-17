@@ -79,3 +79,9 @@
   - JsonArray/JsonObject/JsonString/JsonNumber/JsonBool/JsonNull;
   - JsonArrayIter/JsonArrayIterMut/JsonArrayIntoIter/JsonObjectIter/JsonObjectIterMut/JsonObjectIntoIter;
   - Json/JsonFormatter;
+  
+## [task](#toc)
+
+- Task: 任务Trait;
+- StateMachine/State: 状态机和状态机状态trait;
+- ThreadPool/ThreadPoolBuilder: 线程池和线程池builder;
